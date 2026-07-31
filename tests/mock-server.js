@@ -1,12 +1,12 @@
 const http = require('http');
 
 const events = [
-  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Настольная игра', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern' },
-  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '' },
-  { date: '2026-08-04', time: '', city: 'Москва', format: 'Настольная игра', game: 'Descent', place: '', organizer: 'Влад', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '' },
+  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Настольная игра', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна' },
+  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '' },
+  { date: '2026-08-04', time: '', city: 'Москва', format: 'Настольная игра', game: 'Descent', place: '', organizer: 'Влад', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '' },
   // deliberately in the past relative to "today" (sandbox clock is 2026-07-31) and still
   // marked "Набор открыт" -- exercises the client-side past-event override on its own
-  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Настольная игра', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '' },
+  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Настольная игра', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '' },
 ];
 
 let signups = [];
@@ -30,7 +30,7 @@ function publicEvents() {
       id: key, date: e.date, time: e.time, city: e.city, format: e.format, game: e.game,
       place: e.place, organizer: e.organizer, maxParticipants: e.maxParticipants, status: e.status,
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
-      teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '',
+      teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '',
       participantsCount: active.length, participantNames: active.map(a => a.name),
       isOpen, isFull
     };
@@ -106,7 +106,7 @@ const server = http.createServer((req, res) => {
           game: payload.game, place: payload.place || '', organizer: payload.organizer,
           maxParticipants: payload.maxParticipants || null, status: 'Набор открыт', note: payload.note || '',
           difficulty: payload.difficulty || '', maxDuration: payload.maxDuration || null,
-          teseraUrl: payload.teseraUrl || '', bggUrl: payload.bggUrl || ''
+          teseraUrl: payload.teseraUrl || '', bggUrl: payload.bggUrl || '', setting: payload.setting || ''
         });
         res.end(JSON.stringify({ ok: true, id: dupKey }));
         return;

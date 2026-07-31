@@ -41,13 +41,19 @@
     el.innerHTML = values.map(function (v) { return '<option value="' + v.replace(/"/g, '&quot;') + '">'; }).join('');
   }
 
+  // a fixed, curated list instead of deriving жанр suggestions from the sheet's raw
+  // historical values -- legacy rows have generic entries like "Настольная игра" that
+  // aren't useful as a genre tag (it's just a synonym for "board game" itself)
+  var GENRE_SUGGESTIONS = ['Евро', 'Америтреш', 'Пати', 'Кооперативная', 'Карточная', 'НРИ'];
+  var SETTING_SUGGESTIONS = ['фэнтези', 'космос', 'детектив', 'ужасы', 'постапокалипсис', 'история'];
+
   function loadSuggestions() {
+    fillDatalist('formatList', GENRE_SUGGESTIONS);
+    fillDatalist('settingList', SETTING_SUGGESTIONS);
     apiGet('events').then(function (res) {
       if (!res.ok) return;
       var cities = Array.from(new Set(res.events.map(function (e) { return e.city; }).filter(Boolean)));
-      var formats = Array.from(new Set(res.events.map(function (e) { return e.format; }).filter(Boolean)));
       fillDatalist('cityList', cities);
-      fillDatalist('formatList', formats);
     }).catch(function () { /* suggestions are a nice-to-have, ignore failures */ });
   }
 
@@ -65,6 +71,7 @@
     lines.push('👥 Мест: ' + (ev.maxParticipants ? ev.maxParticipants : 'без ограничений'));
     if (ev.difficulty) lines.push('🎯 Сложность: ' + ev.difficulty);
     if (ev.maxDuration) lines.push('⏱ Время партии: ~' + ev.maxDuration + ' мин (при полном столе)');
+    if (ev.setting) lines.push('🌍 Сеттинг: ' + ev.setting);
     if (ev.teseraUrl) lines.push('🔗 Тесера: ' + ev.teseraUrl);
     if (ev.bggUrl) lines.push('🔗 BGG: ' + ev.bggUrl);
     if (ev.note) lines.push('ℹ️ ' + ev.note);
@@ -104,6 +111,7 @@
       maxParticipants: document.getElementById('fMax').value ? Number(document.getElementById('fMax').value) : null,
       difficulty: document.getElementById('fDifficulty').value,
       maxDuration: document.getElementById('fMaxDuration').value ? Number(document.getElementById('fMaxDuration').value) : null,
+      setting: document.getElementById('fSetting').value.trim(),
       teseraUrl: document.getElementById('fTesera').value.trim(),
       bggUrl: document.getElementById('fBgg').value.trim(),
       note: document.getElementById('fNote').value.trim()
@@ -122,7 +130,8 @@
       action: 'createEvent',
       date: ev.date, time: ev.time, city: ev.city, format: ev.format, game: ev.game,
       place: ev.place, organizer: ev.organizer, maxParticipants: ev.maxParticipants, note: ev.note,
-      difficulty: ev.difficulty, maxDuration: ev.maxDuration, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
+      difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
+      teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
     }).then(function (res) {
       btn.disabled = false;
       btn.textContent = 'Добавить и получить текст поста';

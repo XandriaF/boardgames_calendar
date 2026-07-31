@@ -52,6 +52,13 @@
     localStorage.setItem('nastolki_me', JSON.stringify(me));
   }
 
+  // the "это вы" button never reflected a saved identity -- it always said
+  // "указать имя и почту" even right after saving. Show the saved name instead.
+  function renderWhoAmI() {
+    var me = getMe();
+    document.getElementById('whoAmIBtn').textContent = (me && me.name) ? me.name : 'указать имя и почту';
+  }
+
   // ---------- API ----------
   function apiGet(action, params) {
     var url = API_URL + '?action=' + encodeURIComponent(action);
@@ -212,7 +219,11 @@
 
     var tags = document.createElement('div');
     tags.className = 'card-tags';
-    [ev.city, ev.format, ev.difficulty].filter(Boolean).forEach(function (t) {
+    var tagValues = [ev.city, ev.format, ev.difficulty].filter(Boolean);
+    if (ev.setting) {
+      ev.setting.split(',').map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) { tagValues.push(s); });
+    }
+    tagValues.forEach(function (t) {
       var tag = document.createElement('span');
       tag.className = 'tag';
       tag.textContent = t;
@@ -332,6 +343,7 @@
       renderStats();
       renderFilters();
       renderGrid();
+      renderWhoAmI();
       highlightFromHash();
     });
   }
@@ -455,6 +467,8 @@
     el.textContent = msg;
     el.hidden = false;
   }
+
+  renderWhoAmI(); // show any saved identity immediately, even before the network call resolves
 
   if (!API_URL || API_URL.indexOf('ВСТАВЬТЕ') !== -1) {
     document.getElementById('loadingState').textContent = 'Сайт ещё не подключён к таблице. Заполните APPS_SCRIPT_URL в config.js — см. SETUP.md.';

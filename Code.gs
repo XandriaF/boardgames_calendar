@@ -99,6 +99,7 @@ function getPublicEvents(signups) {
     var maxDuration = row[11];
     var teseraUrl = row[12];
     var bggUrl = row[13];
+    var setting = row[14];
 
     if (!date || !game) continue;
     if (PUBLIC_STATUSES.indexOf(status) === -1) continue;
@@ -126,6 +127,7 @@ function getPublicEvents(signups) {
       maxDuration: maxDuration ? Number(maxDuration) : null,
       teseraUrl: teseraUrl || '',
       bggUrl: bggUrl || '',
+      setting: setting || '',
       participantsCount: participantsCount,
       participantNames: active.map(function (p) { return p.name; }),
       isOpen: isOpen,
@@ -192,6 +194,7 @@ function handleCreateEvent(body) {
   var note = (body.note || '').trim();
   var difficulty = (body.difficulty || '').trim();
   var maxDuration = body.maxDuration;
+  var setting = (body.setting || '').trim();
   var teseraUrl = (body.teseraUrl || '').trim();
   var bggUrl = (body.bggUrl || '').trim();
 
@@ -219,7 +222,8 @@ function handleCreateEvent(body) {
     difficulty,
     maxDuration ? Number(maxDuration) : '',
     teseraUrl,
-    bggUrl
+    bggUrl,
+    setting
   ]);
 
   return { ok: true, id: eventKey(date, time, game) };

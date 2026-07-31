@@ -47,6 +47,7 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   doc.getElementById('fNote').value = 'для новичков';
   doc.getElementById('fDifficulty').value = 'Сложная';
   doc.getElementById('fMaxDuration').value = '180';
+  doc.getElementById('fSetting').value = 'ужасы, детектив';
   doc.getElementById('fTesera').value = 'https://tesera.ru/game/cthulhu/';
   doc.getElementById('fBgg').value = 'https://boardgamegeek.com/boardgame/cthulhu';
 
@@ -68,6 +69,7 @@ async function waitFor(cond, timeout = 5000, step = 50) {
     ['note in post text', text.includes('для новичков')],
     ['difficulty in post text', text.includes('Сложность: Сложная')],
     ['max duration in post text', text.includes('180 мин')],
+    ['setting in post text', text.includes('Сеттинг: ужасы, детектив')],
     ['tesera link in post text', text.includes('https://tesera.ru/game/cthulhu/')],
     ['bgg link in post text', text.includes('https://boardgamegeek.com/boardgame/cthulhu')],
   ];
@@ -104,6 +106,9 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   const createdTags = Array.from(createdCard.querySelectorAll('.card-tags .tag')).map(t => t.textContent);
   if (!createdTags.includes('Сложная')) throw new Error('created event missing difficulty tag on index.html, got: ' + createdTags);
   if (!createdCard.querySelector('.card-meta').textContent.includes('180 мин')) throw new Error('created event missing max duration line on index.html');
+  if (!createdTags.includes('ужасы') || !createdTags.includes('детектив')) {
+    throw new Error('created event missing setting keyword tags on index.html, got: ' + createdTags);
+  }
   const createdLinkHrefs = Array.from(createdCard.querySelectorAll('.card-link')).map(l => l.getAttribute('href'));
   if (!createdLinkHrefs.includes('https://tesera.ru/game/cthulhu/') || !createdLinkHrefs.includes('https://boardgamegeek.com/boardgame/cthulhu')) {
     throw new Error('created event missing tesera/bgg links on index.html, got: ' + createdLinkHrefs);
