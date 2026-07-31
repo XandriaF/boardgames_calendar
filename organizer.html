@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Анонс игры • билайн настолки</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23202632%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 fill=%22%23FFC800%22 text-anchor=%22middle%22 font-family=%22Arial%22>🎲</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="wrap wrap-narrow">
+
+  <div class="head">
+    <span class="tag">для организаторов</span>
+    <h1 class="hero hero-sm">анонсировать <span class="accent">игру</span></h1>
+    <p class="lead md">заполните форму — мероприятие сразу появится на сайте и в таблице, а внизу получите готовый текст поста для вашего чата.</p>
+  </div>
+
+  <p class="cap mut3 footer-note back-link"><a href="index.html" style="color:inherit">← ко всем мероприятиям</a></p>
+
+  <section id="formStatus" class="note" hidden></section>
+
+  <form class="card form-card" id="eventForm">
+    <div class="form-grid">
+      <label class="field">
+        <span>Дата *</span>
+        <input type="date" id="fDate" required>
+      </label>
+      <label class="field">
+        <span>Время</span>
+        <input type="time" id="fTime">
+      </label>
+      <label class="field">
+        <span>Город *</span>
+        <input type="text" id="fCity" list="cityList" placeholder="Москва" required>
+        <datalist id="cityList"></datalist>
+      </label>
+      <label class="field">
+        <span>Формат</span>
+        <input type="text" id="fFormat" list="formatList" placeholder="Настольная игра">
+        <datalist id="formatList"></datalist>
+      </label>
+      <label class="field field-wide">
+        <span>Игра *</span>
+        <input type="text" id="fGame" placeholder="Каркассон" required>
+      </label>
+      <label class="field">
+        <span>Место</span>
+        <input type="text" id="fPlace" placeholder="Клубик">
+      </label>
+      <label class="field">
+        <span>Организатор *</span>
+        <input type="text" id="fOrganizer" placeholder="Даша Иванова" required>
+      </label>
+      <label class="field">
+        <span>Макс. участников</span>
+        <input type="number" id="fMax" min="1" placeholder="без ограничений">
+      </label>
+      <label class="field field-wide">
+        <span>Комментарий / ссылка</span>
+        <input type="text" id="fNote" placeholder="необязательно">
+      </label>
+    </div>
+    <button class="btn-primary" id="submitBtn" type="submit">Добавить и получить текст поста</button>
+    <p class="modal-error" id="formError" hidden></p>
+  </form>
+
+  <section class="card result-card" id="resultCard" hidden>
+    <h3>Готово 🎲</h3>
+    <p class="modal-hint">Мероприятие добавлено на сайт и в таблицу «Мероприятия». Текст ниже можно сразу вставить в чат.</p>
+    <textarea id="postText" class="post-text" readonly rows="9"></textarea>
+    <div class="result-actions">
+      <button class="btn-primary" id="copyBtn" type="button">Скопировать текст</button>
+      <button class="btn-ghost" id="resetBtn" type="button">Анонсировать ещё одну</button>
+    </div>
+    <p class="cap mut3" id="copyHint" style="margin-top:10px"></p>
+  </section>
+
+</div>
+
+<script src="config.js"></script>
+<script src="organizer.js"></script>
+</body>
+</html>
