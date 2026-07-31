@@ -8,16 +8,16 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 
 // ---- fixture data, matching the exact column order of the real sheets ----
 // Мероприятия: Дата, Время, Город, Жанр, Игра, Место, Организатор, Макс.участников, Статус, Комментарий,
-//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг
+//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Настольная игра', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна'],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', ''],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Настольная игра', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', ''],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Настольная игра', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', ''], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Настольная игра', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg'],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', ''],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Настольная игра', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', ''],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Настольная игра', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', ''], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', ''],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', ''],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус
@@ -124,6 +124,7 @@ check('open event carries difficulty/maxDuration/tesera/bgg from sheet columns K
   dracon && dracon.difficulty === 'Средняя' && dracon.maxDuration === 90 &&
   dracon.teseraUrl === 'https://tesera.ru/game/tavern/' && dracon.bggUrl === 'https://boardgamegeek.com/boardgame/tavern');
 check('open event carries setting from sheet column O', dracon && dracon.setting === 'фэнтези, таверна');
+check('open event carries imageUrl from sheet column P', dracon && dracon.imageUrl === 'https://example.com/tavern.jpg');
 
 const brassEmptyFields = r1.events.find(e => e.game === 'Брасс Бирмингем');
 check('event with blank K-N columns returns empty/null, not undefined or errors',
@@ -184,7 +185,7 @@ const ce1 = callDoPost({
   action: 'createEvent', date: '2026-09-10', time: '19:00', city: 'Новосибирск', format: 'Настольная игра',
   game: 'Терраформирование Марса', place: 'Офис НСК', organizer: 'Оля', maxParticipants: 4, note: 'новичкам ок',
   difficulty: 'Сложная', maxDuration: 150, teseraUrl: 'https://tesera.ru/game/mars/', bggUrl: 'https://boardgamegeek.com/boardgame/mars',
-  setting: 'космос, экономика'
+  setting: 'космос, экономика', imageUrl: 'https://example.com/mars.jpg'
 });
 check('createEvent ok', ce1.ok === true);
 check('createEvent appended exactly one row', eventsRows.length === before + 1);
@@ -195,6 +196,7 @@ check('createEvent wrote difficulty/maxDuration/tesera/bgg into columns K-N',
   newRow[10] === 'Сложная' && newRow[11] === 150 &&
   newRow[12] === 'https://tesera.ru/game/mars/' && newRow[13] === 'https://boardgamegeek.com/boardgame/mars');
 check('createEvent wrote setting into column O', newRow[14] === 'космос, экономика');
+check('createEvent wrote imageUrl into column P', newRow[15] === 'https://example.com/mars.jpg');
 check('createEvent date round-trips via formatDate to 2026-09-10',
   sandbox.formatDate ? true : true); // sanity placeholder, checked below via doGet
 
@@ -205,7 +207,7 @@ check('new event isOpen (fresh, 0 participants, max 4)', created && created.isOp
 check('new event visible via doGet carries the new fields too',
   created.difficulty === 'Сложная' && created.maxDuration === 150 &&
   created.teseraUrl === 'https://tesera.ru/game/mars/' && created.bggUrl === 'https://boardgamegeek.com/boardgame/mars' &&
-  created.setting === 'космос, экономика');
+  created.setting === 'космос, экономика' && created.imageUrl === 'https://example.com/mars.jpg');
 
 // createEvent without any of the new optional fields -> should not throw, should return empty/null
 const ce4 = callDoPost({
@@ -217,7 +219,8 @@ const r5 = callDoGet({ action: 'events' });
 const createdNoExtras = r5.events.find(e => e.game === 'Каркассон');
 check('createEvent without optional fields yields empty/null, not undefined or crash',
   createdNoExtras.difficulty === '' && createdNoExtras.maxDuration === null &&
-  createdNoExtras.teseraUrl === '' && createdNoExtras.bggUrl === '' && createdNoExtras.setting === '');
+  createdNoExtras.teseraUrl === '' && createdNoExtras.bggUrl === '' && createdNoExtras.setting === '' &&
+  createdNoExtras.imageUrl === '');
 
 // duplicate rejected
 const ce2 = callDoPost({

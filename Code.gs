@@ -100,6 +100,7 @@ function getPublicEvents(signups) {
     var teseraUrl = row[12];
     var bggUrl = row[13];
     var setting = row[14];
+    var imageUrl = row[15];
 
     if (!date || !game) continue;
     if (PUBLIC_STATUSES.indexOf(status) === -1) continue;
@@ -128,6 +129,7 @@ function getPublicEvents(signups) {
       teseraUrl: teseraUrl || '',
       bggUrl: bggUrl || '',
       setting: setting || '',
+      imageUrl: imageUrl || '',
       participantsCount: participantsCount,
       participantNames: active.map(function (p) { return p.name; }),
       isOpen: isOpen,
@@ -195,6 +197,7 @@ function handleCreateEvent(body) {
   var difficulty = (body.difficulty || '').trim();
   var maxDuration = body.maxDuration;
   var setting = (body.setting || '').trim();
+  var imageUrl = (body.imageUrl || '').trim();
   var teseraUrl = (body.teseraUrl || '').trim();
   var bggUrl = (body.bggUrl || '').trim();
 
@@ -223,7 +226,8 @@ function handleCreateEvent(body) {
     maxDuration ? Number(maxDuration) : '',
     teseraUrl,
     bggUrl,
-    setting
+    setting,
+    imageUrl
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)

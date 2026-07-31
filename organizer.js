@@ -72,6 +72,7 @@
     if (ev.difficulty) lines.push('🎯 Сложность: ' + ev.difficulty);
     if (ev.maxDuration) lines.push('⏱ Время партии: ~' + ev.maxDuration + ' мин (при полном столе)');
     if (ev.setting) lines.push('🌍 Сеттинг: ' + ev.setting);
+    if (ev.imageUrl) lines.push('🖼 ' + ev.imageUrl);
     if (ev.teseraUrl) lines.push('🔗 Тесера: ' + ev.teseraUrl);
     if (ev.bggUrl) lines.push('🔗 BGG: ' + ev.bggUrl);
     if (ev.note) lines.push('ℹ️ ' + ev.note);
@@ -112,6 +113,7 @@
       difficulty: document.getElementById('fDifficulty').value,
       maxDuration: document.getElementById('fMaxDuration').value ? Number(document.getElementById('fMaxDuration').value) : null,
       setting: document.getElementById('fSetting').value.trim(),
+      imageUrl: document.getElementById('fImage').value.trim(),
       teseraUrl: document.getElementById('fTesera').value.trim(),
       bggUrl: document.getElementById('fBgg').value.trim(),
       note: document.getElementById('fNote').value.trim()
@@ -131,7 +133,7 @@
       date: ev.date, time: ev.time, city: ev.city, format: ev.format, game: ev.game,
       place: ev.place, organizer: ev.organizer, maxParticipants: ev.maxParticipants, note: ev.note,
       difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
-      teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
+      imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
     }).then(function (res) {
       btn.disabled = false;
       btn.textContent = 'Добавить и получить текст поста';

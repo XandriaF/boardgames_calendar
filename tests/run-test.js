@@ -85,9 +85,17 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   console.log('PASS: setting keywords render as separate tag chips ->', tagTexts);
 
+  // image renders as an <img class="card-image"> when imageUrl is set
+  const cardImg = openCardCheck.querySelector('.card-image');
+  if (!cardImg || cardImg.getAttribute('src') !== 'https://example.com/tavern.jpg') {
+    throw new Error('card image missing or wrong src: ' + (cardImg && cardImg.getAttribute('src')));
+  }
+  console.log('PASS: card image renders with correct src ->', cardImg.getAttribute('src'));
+
   // event with none of the optional fields set (Descent) must render with none of this, no crash
   const noExtrasCard = cards.find(c => c.querySelector('.card-game').textContent === 'Descent');
   if (noExtrasCard.querySelector('.card-link')) throw new Error('Descent should have no links, since teseraUrl/bggUrl are empty');
+  if (noExtrasCard.querySelector('.card-image')) throw new Error('Descent should have no image, since imageUrl is empty');
   console.log('PASS: event without difficulty/duration/links renders cleanly (no stray elements)');
 
   // 6. sign up for the open event (Таверна Красный дракон, max 2)

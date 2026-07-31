@@ -213,6 +213,17 @@
     top.appendChild(dateEl);
     top.appendChild(badge);
 
+    var image = null;
+    if (ev.imageUrl) {
+      image = document.createElement('img');
+      image.className = 'card-image';
+      image.src = ev.imageUrl;
+      image.alt = ev.game;
+      image.loading = 'lazy';
+      // a bad/expired link should just quietly disappear, not show a broken-image icon
+      image.addEventListener('error', function () { image.remove(); });
+    }
+
     var game = document.createElement('div');
     game.className = 'card-game';
     game.textContent = ev.game;
@@ -255,6 +266,7 @@
     actions.appendChild(renderActionButton(ev));
 
     card.appendChild(top);
+    if (image) card.appendChild(image);
     card.appendChild(game);
     card.appendChild(tags);
     card.appendChild(meta);
