@@ -86,7 +86,7 @@ function getPublicEvents(signups) {
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     var date = row[0];
-    var time = row[1];
+    var time = formatTimeVal(row[1]);
     var city = row[2];
     var format = row[3]; // колонка называется «Жанр» в таблице, ключ в API остался format
     var game = row[4];
@@ -225,6 +225,9 @@ function handleCreateEvent(body) {
     bggUrl,
     setting
   ]);
+  // force the «Время» column to stay plain text -- otherwise Sheets can silently
+  // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
+  sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
 
   return { ok: true, id: eventKey(date, time, game) };
 }
@@ -250,7 +253,7 @@ function findEvent(date, time, game) {
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     if (!row[0] || !row[4]) continue;
-    if (formatDate(row[0]) === date && String(row[1] || '') === String(time || '') && row[4] === game) {
+    if (formatDate(row[0]) === date && formatTimeVal(row[1]) === String(time || '') && row[4] === game) {
       return {
         maxParticipants: row[7] ? Number(row[7]) : null,
         status: row[8]
@@ -267,7 +270,7 @@ function getAllSignupStates() {
   var map = {};
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
-    var date = row[1], time = row[2], game = row[3], name = row[4], email = row[5], status = row[6];
+    var date = row[1], time = formatTimeVal(row[2]), game = row[3], name = row[4], email = row[5], status = row[6];
     if (!date || !game || !email) continue;
     var dateStr = date instanceof Date ? formatDate(date) : String(date);
     var key = eventKey(dateStr, time, game);
@@ -289,10 +292,24 @@ function getAllSignupStates() {
 function appendSignupRow(date, time, game, name, email, status) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SIGNUPS);
   sheet.appendRow([new Date(), date, time, game, name, email, status]);
+  // same auto-time-conversion guard as the Мероприятия sheet's «Время» column
+  sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@');
 }
 
 function eventKey(dateStr, time, game) {
   return dateStr + '|' + (time || '') + '|' + game;
+}
+
+// Google Sheets sometimes auto-detects a plain "14:30" string written into the «Время»
+// column as a Time value and silently converts the cell to a time serial number, which
+// getDataRange().getValues() then returns as a Date object anchored to 1899-12-30 (the
+// classic time-only epoch) instead of the original string. This defensively reformats
+// any such Date back into a clean "HH:mm" string wherever a time value is read.
+function formatTimeVal(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, TIMEZONE, 'HH:mm');
+  }
+  return String(val || '').trim();
 }
 
 function formatDate(dateVal) {
@@ -423,7 +440,7 @@ function groupEventsByDate() {
   var map = {};
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
-    var date = row[0], time = row[1], game = row[4], place = row[5], organizer = row[6], status = row[8];
+    var date = row[0], time = formatTimeVal(row[1]), game = row[4], place = row[5], organizer = row[6], status = row[8];
     if (!date || !game) continue;
     var dateStr = formatDate(date);
     if (!map[dateStr]) map[dateStr] = [];

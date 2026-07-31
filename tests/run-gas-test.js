@@ -15,6 +15,9 @@ const eventsRows = [
   [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', ''],
   [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Настольная игра', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', ''],
   [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Настольная игра', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', ''], // should be hidden
+  // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
+  // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', ''],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус
@@ -29,6 +32,15 @@ function makeSheetStub(rows) {
     },
     appendRow(row) {
       rows.push(row);
+    },
+    getLastRow() {
+      return rows.length; // 1-indexed, matches Sheets (row 1 = header)
+    },
+    getRange(r, c) {
+      return {
+        setNumberFormat(fmt) { this._fmt = fmt; return this; },
+        setValue(v) { rows[r - 1][c - 1] = v; return this; }
+      };
     }
   };
 }
@@ -51,6 +63,11 @@ const sandbox = {
       const y = date.getFullYear();
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
+      if (fmt === 'HH:mm') {
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
       return `${y}-${m}-${d}`;
     }
   },
@@ -71,7 +88,10 @@ vm.runInContext(code, sandbox, { filename: 'Code.gs' });
 // check would (falsely, only in this test) fail. In real Apps Script there is only one realm,
 // so this is purely a test-harness concern, not a bug in Code.gs.
 const D = vm.runInContext('Date', sandbox);
-eventsRows.forEach(row => { if (row[0] instanceof Date) row[0] = new D(row[0].getTime()); });
+eventsRows.forEach(row => {
+  if (row[0] instanceof Date) row[0] = new D(row[0].getTime());
+  if (row[1] instanceof Date) row[1] = new D(row[1].getTime());
+});
 
 function callDoGet(params) {
   const out = sandbox.doGet({ parameter: params });
@@ -92,7 +112,11 @@ function check(label, cond) {
 const r1 = callDoGet({ action: 'events' });
 check('doGet events ok', r1.ok === true);
 check('draft (Черновик) hidden from public list', !r1.events.some(e => e.game === 'Нечто'));
-check('3 public events returned', r1.events.length === 3);
+check('4 public events returned', r1.events.length === 4);
+
+const timeBug = r1.events.find(e => e.game === 'Тест Время-Баг');
+check('a Время cell corrupted into a Date object (Sheets auto-conversion) is reformatted back to "HH:mm"',
+  timeBug && timeBug.time === '14:59');
 
 const dracon = r1.events.find(e => e.game === 'Таверна Красный дракон');
 check('open event isOpen=true, 0 participants', dracon && dracon.isOpen === true && dracon.participantsCount === 0);
@@ -149,6 +173,11 @@ check('events without email omits registeredIds entirely', r3c.ok && r3c.registe
 const s4 = callDoPost({ action: 'signup', date: '2026-08-04', time: '', game: 'Descent', name: 'X', email: 'x@beeline.ru' });
 check('signup on cancelled event rejected', s4.ok === false && s4.error === 'event cancelled');
 
+// signup against the event whose Время cell was corrupted into a Date object -- findEvent
+// must still match it correctly against the clean "14:59" string a real client would send
+const sBug = callDoPost({ action: 'signup', date: '2026-09-20', time: '14:59', game: 'Тест Время-Баг', name: 'ИгрокБаг', email: 'bug@beeline.ru' });
+check('signup succeeds against an event whose Время cell was corrupted into a Date object', sBug.ok === true && sBug.participantsCount === 1);
+
 // ---- createEvent (organizer form) ----
 const before = eventsRows.length;
 const ce1 = callDoPost({
@@ -200,6 +229,24 @@ check('duplicate createEvent rejected', ce2.ok === false && ce2.error === 'dupli
 // missing required fields rejected
 const ce3 = callDoPost({ action: 'createEvent', date: '2026-09-11', time: '19:00', game: 'Без города' });
 check('createEvent missing fields rejected', ce3.ok === false && ce3.error === 'missing fields');
+
+// ---- organizer deletes an event row directly in Google Sheets ----
+// (do this last -- it removes "Таверна Красный дракон" from the fixture, which earlier
+// assertions above still depend on being present)
+const draconRowIndex = eventsRows.findIndex(row => row[4] === 'Таверна Красный дракон');
+eventsRows.splice(draconRowIndex, 1); // simulates manually deleting the sheet row
+
+const rAfterDelete = callDoGet({ action: 'events' });
+check('deleted event no longer appears in doGet(events)', !rAfterDelete.events.some(e => e.game === 'Таверна Красный дракон'));
+
+const sAfterDelete = callDoPost({ action: 'signup', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Кто-то', email: 'ghost@beeline.ru' });
+check('signup against a deleted event is rejected ("event not found"), not a crash', sAfterDelete.ok === false && sAfterDelete.error === 'event not found');
+
+const ceAfterDelete = callDoPost({
+  action: 'createEvent', date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Настольная игра',
+  game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', maxParticipants: 2, note: ''
+});
+check('re-announcing the same date/time/game after the old row was deleted is allowed (no false duplicate)', ceAfterDelete.ok === true);
 
 console.log(failures === 0 ? '\nALL GAS-LOGIC TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
