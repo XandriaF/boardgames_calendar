@@ -33,12 +33,21 @@ function doGet(e) {
   try {
     var action = (e && e.parameter && e.parameter.action) || 'events';
     if (action === 'events') {
-      return jsonOutput({ ok: true, events: getPublicEvents() });
+      // read the Записи sheet once and reuse it for both the events list and (if an
+      // email was passed) the caller's registered ids -- avoids a second round trip
+      // and a second full sheet read that the client used to need via action=myStatus
+      var signups = getAllSignupStates();
+      var result = { ok: true, events: getPublicEvents(signups) };
+      var email = normalizeEmail((e.parameter && e.parameter.email) || '');
+      if (email) result.registeredIds = getMyRegistrations(email, signups);
+      return jsonOutput(result);
     }
     if (action === 'myStatus') {
-      var email = normalizeEmail(e.parameter.email || '');
-      if (!email) return jsonOutput({ ok: false, error: 'email required' });
-      return jsonOutput({ ok: true, registered: getMyRegistrations(email) });
+      // kept for backwards compatibility (e.g. an old cached copy of app.js); the
+      // current app.js gets registeredIds bundled into action=events instead
+      var email2 = normalizeEmail(e.parameter.email || '');
+      if (!email2) return jsonOutput({ ok: false, error: 'email required' });
+      return jsonOutput({ ok: true, registered: getMyRegistrations(email2) });
     }
     return jsonOutput({ ok: false, error: 'unknown action' });
   } catch (err) {
@@ -68,10 +77,10 @@ function doPost(e) {
 
 // ---------- events ----------
 
-function getPublicEvents() {
+function getPublicEvents(signups) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   var values = sheet.getDataRange().getValues();
-  var signups = getAllSignupStates(); // { eventKey: [{name,email,status}] }
+  signups = signups || getAllSignupStates(); // { eventKey: [{name,email,status}] }
   var events = [];
 
   for (var r = 1; r < values.length; r++) {
@@ -79,13 +88,17 @@ function getPublicEvents() {
     var date = row[0];
     var time = row[1];
     var city = row[2];
-    var format = row[3];
+    var format = row[3]; // колонка называется «Жанр» в таблице, ключ в API остался format
     var game = row[4];
     var place = row[5];
     var organizer = row[6];
     var maxParticipants = row[7];
     var status = row[8];
     var note = row[9];
+    var difficulty = row[10];
+    var maxDuration = row[11];
+    var teseraUrl = row[12];
+    var bggUrl = row[13];
 
     if (!date || !game) continue;
     if (PUBLIC_STATUSES.indexOf(status) === -1) continue;
@@ -109,6 +122,10 @@ function getPublicEvents() {
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       status: status,
       note: note || '',
+      difficulty: difficulty || '',
+      maxDuration: maxDuration ? Number(maxDuration) : null,
+      teseraUrl: teseraUrl || '',
+      bggUrl: bggUrl || '',
       participantsCount: participantsCount,
       participantNames: active.map(function (p) { return p.name; }),
       isOpen: isOpen,
@@ -167,12 +184,16 @@ function handleCreateEvent(body) {
   var date = body.date;
   var time = (body.time || '').trim();
   var city = (body.city || '').trim();
-  var format = (body.format || '').trim();
+  var format = (body.format || '').trim(); // «Жанр» в таблице/на сайте
   var game = (body.game || '').trim();
   var place = (body.place || '').trim();
   var organizer = (body.organizer || '').trim();
   var maxParticipants = body.maxParticipants;
   var note = (body.note || '').trim();
+  var difficulty = (body.difficulty || '').trim();
+  var maxDuration = body.maxDuration;
+  var teseraUrl = (body.teseraUrl || '').trim();
+  var bggUrl = (body.bggUrl || '').trim();
 
   if (!date || !game || !city || !organizer) {
     return { ok: false, error: 'missing fields' };
@@ -194,14 +215,18 @@ function handleCreateEvent(body) {
     organizer,
     maxParticipants ? Number(maxParticipants) : '',
     'Набор открыт',
-    note
+    note,
+    difficulty,
+    maxDuration ? Number(maxDuration) : '',
+    teseraUrl,
+    bggUrl
   ]);
 
   return { ok: true, id: eventKey(date, time, game) };
 }
 
-function getMyRegistrations(email) {
-  var signups = getAllSignupStates();
+function getMyRegistrations(email, signups) {
+  signups = signups || getAllSignupStates();
   var result = [];
   Object.keys(signups).forEach(function (key) {
     var rows = signups[key];

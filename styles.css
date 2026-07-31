@@ -200,6 +200,7 @@ input { text-transform: none; }
   gap: 12px;
 }
 .card.is-cancelled { opacity: 0.6; }
+.card.is-past { opacity: 0.55; }
 .card.is-highlighted { box-shadow: 0 0 0 3px var(--brand); transition: box-shadow 0.3s ease; }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
@@ -224,6 +225,7 @@ input { text-transform: none; }
 .badge-open { background: #E3F7ED; color: var(--ok); }
 .badge-full { background: var(--bg); color: var(--t2); }
 .badge-cancelled { background: #FFE8DC; color: var(--err); }
+.badge-past { background: var(--border); color: var(--t2); }
 
 .card-game { font-size: 22px; line-height: 27px; font-weight: 600; letter-spacing: -0.01em; }
 .card-meta { font-size: 13px; color: var(--t2); display: flex; flex-direction: column; gap: 3px; }
@@ -241,6 +243,10 @@ input { text-transform: none; }
 .card-participants { font-size: 13px; color: var(--t1); }
 .card-participants b { font-weight: 600; }
 .card-participants .names { color: var(--t2); }
+
+.card-links { display: flex; gap: 12px; flex-wrap: wrap; }
+.card-link { font-size: 12px; font-weight: 600; color: var(--t2); text-decoration: none; }
+.card-link:hover { color: var(--t1); text-decoration: underline; }
 
 .card-actions { margin-top: auto; padding-top: 4px; }
 
@@ -306,7 +312,8 @@ input { text-transform: none; }
   line-height: 1;
 }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--t1); }
-.field input {
+.field input,
+.field select {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   padding: 11px 14px;
@@ -314,8 +321,11 @@ input { text-transform: none; }
   font-family: inherit;
   font-weight: 400;
   background: var(--bg);
+  color: var(--t1);
 }
-.field input:focus { outline: none; border-color: var(--brand); background: #fff; }
+.field input:focus,
+.field select:focus { outline: none; border-color: var(--brand); background: #fff; }
+.field-hint { font-size: 12px; font-weight: 400; color: var(--t2); line-height: 1.4; }
 .modal-error { color: var(--err); font-size: 13px; margin: 10px 0 0; }
 
 @media (max-width: 640px) {

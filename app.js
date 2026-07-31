@@ -33,6 +33,15 @@
     return 'ev-' + raw.replace(/[^a-zа-яё0-9]+/gi, '-').replace(/^-+|-+$/g, '');
   }
 
+  // an event with a time counts as past once that moment has passed; an event with no
+  // time given is treated as lasting the whole day, so it only flips to "past" after midnight
+  function isPastEvent(ev, now) {
+    now = now || new Date();
+    var dt = ev.time ? new Date(ev.date + 'T' + ev.time + ':00') : new Date(ev.date + 'T23:59:59');
+    if (isNaN(dt)) return false;
+    return dt.getTime() < now.getTime();
+  }
+
   // ---------- persistence of "who am I" ----------
   function getMe() {
     try {
@@ -49,13 +58,17 @@
     Object.keys(params || {}).forEach(function (k) {
       url += '&' + k + '=' + encodeURIComponent(params[k]);
     });
-    return fetch(url).then(function (r) { return r.json(); });
+    // cache-bust: identical GET URLs (e.g. ?action=events) can otherwise be served from the
+    // browser's HTTP cache, so a signup/cancel that changed the sheet doesn't show up on refresh
+    url += '&_ts=' + Date.now();
+    return fetch(url, { cache: 'no-store' }).then(function (r) { return r.json(); });
   }
 
   function apiPost(payload) {
     // text/plain avoids a CORS preflight against the Apps Script endpoint
     return fetch(API_URL, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); });
@@ -118,7 +131,7 @@
     var total = state.events.length;
     var cities = uniqueSorted(state.events.map(function (e) { return e.city; })).length;
     var upcoming = state.events
-      .filter(function (e) { return e.status !== 'Отменено'; })
+      .filter(function (e) { return e.status !== 'Отменено' && !isPastEvent(e); })
       .slice()
       .sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
     var nearest = upcoming[0];
@@ -139,7 +152,14 @@
 
   function renderGrid() {
     var grid = document.getElementById('eventsGrid');
-    var list = state.events.filter(passesFilter);
+    var list = state.events.filter(passesFilter).slice().sort(function (a, b) {
+      var aPast = isPastEvent(a), bPast = isPastEvent(b);
+      if (aPast !== bPast) return aPast ? 1 : -1; // upcoming events always float above past ones
+      var key = function (e) { return e.date + (e.time || ''); };
+      return aPast
+        ? key(b).localeCompare(key(a))  // past: most recently happened first
+        : key(a).localeCompare(key(b)); // upcoming: soonest first
+    });
     grid.innerHTML = '';
 
     if (!list.length) {
@@ -156,10 +176,12 @@
   }
 
   function renderCard(ev) {
+    var past = isPastEvent(ev);
     var card = document.createElement('div');
     card.className = 'card';
     card.id = slugifyEventId(ev.date, ev.time, ev.game);
     if (ev.status === 'Отменено') card.classList.add('is-cancelled');
+    else if (past) card.classList.add('is-past');
     if (ev.isFull) card.classList.add('is-full');
 
     var top = document.createElement('div');
@@ -168,9 +190,19 @@
     dateEl.className = 'card-date';
     dateEl.textContent = fmtDate(ev.date) + (ev.time ? ' · ' + ev.time : '');
     var badge = document.createElement('span');
-    var badgeClass = ev.status === 'Отменено' ? 'badge-cancelled' : (ev.isOpen ? 'badge-open' : 'badge-full');
+    var badgeClass, badgeText;
+    if (ev.status === 'Отменено') {
+      badgeClass = 'badge-cancelled';
+      badgeText = STATUS_LABEL[ev.status] || ev.status;
+    } else if (past) {
+      badgeClass = 'badge-past';
+      badgeText = 'Уже прошло';
+    } else {
+      badgeClass = ev.isOpen ? 'badge-open' : 'badge-full';
+      badgeText = STATUS_LABEL[ev.status] || ev.status;
+    }
     badge.className = 'badge ' + badgeClass;
-    badge.textContent = STATUS_LABEL[ev.status] || ev.status;
+    badge.textContent = badgeText;
     top.appendChild(dateEl);
     top.appendChild(badge);
 
@@ -180,7 +212,7 @@
 
     var tags = document.createElement('div');
     tags.className = 'card-tags';
-    [ev.city, ev.format].filter(Boolean).forEach(function (t) {
+    [ev.city, ev.format, ev.difficulty].filter(Boolean).forEach(function (t) {
       var tag = document.createElement('span');
       tag.className = 'tag';
       tag.textContent = t;
@@ -191,6 +223,15 @@
     meta.className = 'card-meta';
     if (ev.place) meta.appendChild(metaLine('Где', ev.place));
     if (ev.organizer) meta.appendChild(metaLine('Организатор', ev.organizer));
+    if (ev.maxDuration) meta.appendChild(metaLine('Время партии', '~' + ev.maxDuration + ' мин (при полном столе)'));
+
+    var links = null;
+    if (ev.teseraUrl || ev.bggUrl) {
+      links = document.createElement('div');
+      links.className = 'card-links';
+      if (ev.teseraUrl) links.appendChild(externalLink('Тесера', ev.teseraUrl));
+      if (ev.bggUrl) links.appendChild(externalLink('BGG', ev.bggUrl));
+    }
 
     var participants = document.createElement('div');
     participants.className = 'card-participants';
@@ -206,6 +247,7 @@
     card.appendChild(game);
     card.appendChild(tags);
     card.appendChild(meta);
+    if (links) card.appendChild(links);
     card.appendChild(participants);
     card.appendChild(actions);
     return card;
@@ -215,6 +257,16 @@
     var div = document.createElement('div');
     div.innerHTML = escapeHtml(label + ': ') + '<b>' + escapeHtml(value) + '</b>';
     return div;
+  }
+
+  function externalLink(label, url) {
+    var a = document.createElement('a');
+    a.className = 'card-link';
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = label + ' ↗';
+    return a;
   }
 
   function escapeHtml(s) {
@@ -232,6 +284,14 @@
       btn.disabled = true;
       btn.textContent = 'Отменено';
       return btn;
+    }
+
+    if (isPastEvent(ev)) {
+      var pastBtn = document.createElement('button');
+      pastBtn.className = 'btn-primary';
+      pastBtn.disabled = true;
+      pastBtn.textContent = 'Уже прошло';
+      return pastBtn;
     }
 
     if (isRegistered) {
@@ -256,15 +316,14 @@
 
   // ---------- data load ----------
   function loadEvents() {
-    return apiGet('events').then(function (res) {
+    // registeredIds is bundled into the same response as events (when an email is known)
+    // instead of a second round trip to action=myStatus -- halves the network wait on load
+    var me = getMe();
+    var params = (me && me.email) ? { email: me.email } : {};
+    return apiGet('events', params).then(function (res) {
       if (!res.ok) throw new Error(res.error || 'load failed');
       state.events = res.events;
-      var me = getMe();
-      if (me && me.email) {
-        return apiGet('myStatus', { email: me.email }).then(function (r2) {
-          state.registeredIds = (r2 && r2.ok) ? r2.registered : [];
-        });
-      }
+      state.registeredIds = res.registeredIds || [];
     });
   }
 

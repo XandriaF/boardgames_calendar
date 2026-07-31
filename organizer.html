@@ -40,8 +40,8 @@
         <datalist id="cityList"></datalist>
       </label>
       <label class="field">
-        <span>Формат</span>
-        <input type="text" id="fFormat" list="formatList" placeholder="Настольная игра">
+        <span>Жанр</span>
+        <input type="text" id="fFormat" list="formatList" placeholder="Евро, пати, кооператив...">
         <datalist id="formatList"></datalist>
       </label>
       <label class="field field-wide">
@@ -59,6 +59,28 @@
       <label class="field">
         <span>Макс. участников</span>
         <input type="number" id="fMax" min="1" placeholder="без ограничений">
+      </label>
+      <label class="field">
+        <span>Сложность</span>
+        <select id="fDifficulty">
+          <option value="">не указано</option>
+          <option value="Лёгкая">Лёгкая</option>
+          <option value="Средняя">Средняя</option>
+          <option value="Сложная">Сложная</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Макс. время игры, мин</span>
+        <input type="number" id="fMaxDuration" min="1" placeholder="120">
+        <span class="field-hint">Это время партии при максимальном числе участников — с меньшей компанией обычно быстрее</span>
+      </label>
+      <label class="field">
+        <span>Ссылка на Тесеру</span>
+        <input type="url" id="fTesera" placeholder="https://tesera.ru/game/... (необязательно)">
+      </label>
+      <label class="field">
+        <span>Ссылка на BGG</span>
+        <input type="url" id="fBgg" placeholder="https://boardgamegeek.com/boardgame/... (необязательно)">
       </label>
       <label class="field field-wide">
         <span>Комментарий / ссылка</span>

@@ -23,12 +23,14 @@
     Object.keys(params || {}).forEach(function (k) {
       url += '&' + k + '=' + encodeURIComponent(params[k]);
     });
-    return fetch(url).then(function (r) { return r.json(); });
+    url += '&_ts=' + Date.now(); // avoid a stale cached response for identical GET URLs
+    return fetch(url, { cache: 'no-store' }).then(function (r) { return r.json(); });
   }
 
   function apiPost(payload) {
     return fetch(API_URL, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); });
@@ -61,6 +63,10 @@
     lines.push('📍 ' + ev.city + (ev.place ? ' — ' + ev.place : ''));
     lines.push('👤 Организатор: ' + ev.organizer);
     lines.push('👥 Мест: ' + (ev.maxParticipants ? ev.maxParticipants : 'без ограничений'));
+    if (ev.difficulty) lines.push('🎯 Сложность: ' + ev.difficulty);
+    if (ev.maxDuration) lines.push('⏱ Время партии: ~' + ev.maxDuration + ' мин (при полном столе)');
+    if (ev.teseraUrl) lines.push('🔗 Тесера: ' + ev.teseraUrl);
+    if (ev.bggUrl) lines.push('🔗 BGG: ' + ev.bggUrl);
     if (ev.note) lines.push('ℹ️ ' + ev.note);
     lines.push('');
     lines.push('Записаться: ' + link);
@@ -96,6 +102,10 @@
       place: document.getElementById('fPlace').value.trim(),
       organizer: document.getElementById('fOrganizer').value.trim() || (getMe() && getMe().name) || '',
       maxParticipants: document.getElementById('fMax').value ? Number(document.getElementById('fMax').value) : null,
+      difficulty: document.getElementById('fDifficulty').value,
+      maxDuration: document.getElementById('fMaxDuration').value ? Number(document.getElementById('fMaxDuration').value) : null,
+      teseraUrl: document.getElementById('fTesera').value.trim(),
+      bggUrl: document.getElementById('fBgg').value.trim(),
       note: document.getElementById('fNote').value.trim()
     };
 
@@ -111,7 +121,8 @@
     apiPost({
       action: 'createEvent',
       date: ev.date, time: ev.time, city: ev.city, format: ev.format, game: ev.game,
-      place: ev.place, organizer: ev.organizer, maxParticipants: ev.maxParticipants, note: ev.note
+      place: ev.place, organizer: ev.organizer, maxParticipants: ev.maxParticipants, note: ev.note,
+      difficulty: ev.difficulty, maxDuration: ev.maxDuration, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
     }).then(function (res) {
       btn.disabled = false;
       btn.textContent = 'Добавить и получить текст поста';
