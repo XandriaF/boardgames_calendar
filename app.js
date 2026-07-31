@@ -53,10 +53,11 @@
   }
 
   // the "это вы" button never reflected a saved identity -- it always said
-  // "указать имя и почту" even right after saving. Show the saved name instead.
+  // "указать имя и почту" even right after saving. Show the saved name and email instead.
   function renderWhoAmI() {
     var me = getMe();
-    document.getElementById('whoAmIBtn').textContent = (me && me.name) ? me.name : 'указать имя и почту';
+    var label = (me && me.name) ? me.name + (me.email ? ' · ' + me.email : '') : 'указать имя и почту';
+    document.getElementById('whoAmIBtn').textContent = label;
   }
 
   // ---------- API ----------

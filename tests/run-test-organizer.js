@@ -32,8 +32,18 @@ async function waitFor(cond, timeout = 5000, step = 50) {
 
   const doc = window.document;
 
-  await waitFor(() => doc.getElementById('cityList').children.length >= 2);
-  console.log('PASS: city suggestions loaded from existing events ->', Array.from(doc.getElementById('cityList').children).map(o => o.value));
+  // fixed city suggestions should appear immediately, before the network call even resolves
+  const immediateCities = Array.from(doc.getElementById('cityList').children).map(o => o.value);
+  if (!immediateCities.includes('Ростов-на-Дону') || !immediateCities.includes('Онлайн (Board Game Arena)')) {
+    throw new Error('fixed city suggestions missing on first render, got: ' + immediateCities);
+  }
+  console.log('PASS: fixed city suggestions render immediately ->', immediateCities);
+
+  // once real events load, real city names (not in the fixed list) must be merged in too
+  await waitFor(() => Array.from(doc.getElementById('cityList').children).some(o => o.value === 'Санкт-Петербург'));
+  const mergedCities = Array.from(doc.getElementById('cityList').children).map(o => o.value);
+  if (!mergedCities.includes('Ростов-на-Дону')) throw new Error('merge should keep the fixed suggestions too, got: ' + mergedCities);
+  console.log('PASS: real city names from existing events are merged with the fixed suggestions ->', mergedCities);
 
   // fill the form
   doc.getElementById('fDate').value = '2026-09-15';

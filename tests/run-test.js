@@ -112,11 +112,11 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   console.log('PASS: signup modal submitted and closed');
 
   // the "это вы" button must reflect the identity just saved during signup, not keep
-  // showing the generic "указать имя и почту" label forever
-  if (doc.getElementById('whoAmIBtn').textContent !== 'Тестовый Игрок') {
-    throw new Error('whoAmIBtn should show the saved name after signup, got: ' + doc.getElementById('whoAmIBtn').textContent);
+  // showing the generic "указать имя и почту" label forever -- and must show the email too
+  if (doc.getElementById('whoAmIBtn').textContent !== 'Тестовый Игрок · test.player@beeline.ru') {
+    throw new Error('whoAmIBtn should show the saved name+email after signup, got: ' + doc.getElementById('whoAmIBtn').textContent);
   }
-  console.log('PASS: "это вы" button shows saved name after signup ->', doc.getElementById('whoAmIBtn').textContent);
+  console.log('PASS: "это вы" button shows saved name+email after signup ->', doc.getElementById('whoAmIBtn').textContent);
 
   // after refresh, participant count should be 1 of 2, and button should now be "Отменить запись" for this browser's saved identity
   await waitFor(() => {

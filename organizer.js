@@ -46,13 +46,18 @@
   // aren't useful as a genre tag (it's just a synonym for "board game" itself)
   var GENRE_SUGGESTIONS = ['Евро', 'Америтреш', 'Пати', 'Кооперативная', 'Карточная', 'НРИ'];
   var SETTING_SUGGESTIONS = ['фэнтези', 'космос', 'детектив', 'ужасы', 'постапокалипсис', 'история'];
+  // fixed list of official cities, always offered -- merged (not replaced) with whatever
+  // real city names already appear in existing events, since those are legitimate values too
+  var CITY_SUGGESTIONS = ['Онлайн (Board Game Arena)', 'Москва', 'Астрахань', 'Рязань', 'Воронеж',
+    'Пятигорск', 'Челябинск', 'Екатеринбург', 'Ростов-на-Дону', 'Оренбург'];
 
   function loadSuggestions() {
     fillDatalist('formatList', GENRE_SUGGESTIONS);
     fillDatalist('settingList', SETTING_SUGGESTIONS);
+    fillDatalist('cityList', CITY_SUGGESTIONS);
     apiGet('events').then(function (res) {
       if (!res.ok) return;
-      var cities = Array.from(new Set(res.events.map(function (e) { return e.city; }).filter(Boolean)));
+      var cities = Array.from(new Set(CITY_SUGGESTIONS.concat(res.events.map(function (e) { return e.city; }).filter(Boolean))));
       fillDatalist('cityList', cities);
     }).catch(function () { /* suggestions are a nice-to-have, ignore failures */ });
   }
