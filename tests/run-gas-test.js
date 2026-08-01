@@ -207,6 +207,32 @@ check('signup without guests fills the last seat, count=2', sGuestFits.ok === tr
 const cGuestUndo = callDoPost({ action: 'cancel', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', email: 'p3@beeline.ru' });
 check('cleanup cancel ok', cGuestUndo.ok === true);
 
+// ---- "проявить интерес" -- for people this exact slot doesn't suit, but who'd like to
+// play the game some other time. Only p2 remains actively signed up at this point (count=1).
+const i1 = callDoPost({ action: 'interest', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Интересующийся', email: 'interested@beeline.ru' });
+check('interest ok', i1.ok === true);
+const rInterest = callDoGet({ action: 'events' });
+const draconInterest = rInterest.events.find(e => e.game === 'Таверна Красный дракон');
+check('interestCount reflects the new interest row', draconInterest.interestCount === 1);
+check('expressing interest does not affect participantsCount/isFull', draconInterest.participantsCount === 1 && draconInterest.isFull === false);
+
+const i2 = callDoPost({ action: 'interest', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Ещё Один', email: 'interested2@beeline.ru' });
+check('second interest ok', i2.ok === true);
+const rInterest2 = callDoGet({ action: 'events' });
+check('interestCount increments for a second person', rInterest2.events.find(e => e.game === 'Таверна Красный дракон').interestCount === 2);
+
+// expressing interest for someone who is already actively registered (p2) must not overwrite
+// their active signup with an "Интересуюсь" row -- getAllSignupStates collapses to the latest
+// row per (event, email), so that would otherwise silently un-register them
+const iAlreadyRegistered = callDoPost({ action: 'interest', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Игрок2', email: 'p2@beeline.ru' });
+check('interest from an already-registered participant is a no-op', iAlreadyRegistered.ok === true);
+const rAfterNoopInterest = callDoGet({ action: 'events', email: 'p2@beeline.ru' });
+check('already-registered participant stays registered after a no-op interest call',
+  rAfterNoopInterest.registeredIds.includes('2026-08-07|18:00|Таверна Красный дракон'));
+
+const iMissing = callDoPost({ action: 'interest', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', email: 'noname@beeline.ru' });
+check('interest missing name rejected', iMissing.ok === false && iMissing.error === 'missing fields');
+
 // myStatus
 const my2 = callDoGet({ action: 'myStatus', email: 'p2@beeline.ru' });
 check('myStatus for p2 includes the dracon event', my2.ok && my2.registered.includes('2026-08-07|18:00|Таверна Красный дракон'));

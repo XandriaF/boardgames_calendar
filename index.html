@@ -31,6 +31,10 @@
       <span class="filter-label">Жанр</span>
       <div class="pillrow" id="formatChips"></div>
     </div>
+    <div class="filter-block">
+      <span class="filter-label">Прошедшие</span>
+      <button class="btn-ghost" id="togglePastBtn" type="button">показать прошедшие</button>
+    </div>
     <div class="filter-block id-group">
       <span class="filter-label">Это вы</span>
       <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
@@ -85,6 +89,26 @@
     </label>
     <button class="btn-primary" id="confirmSignup" type="button">Записаться</button>
     <p class="modal-error" id="signupError" hidden></p>
+  </div>
+</div>
+
+<!-- Модалка «проявить интерес» -- для тех, кому эта дата/время/место не подходят,
+     но кто хотел бы сыграть в эту игру при другом раскладе -->
+<div class="modal-overlay" id="interestOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" data-close>×</button>
+    <h3 id="interestTitle">Проявить интерес</h3>
+    <p class="modal-hint" id="interestSubtitle">Не подходит именно эта дата, время или место? Дайте знать организатору, что хотели бы сыграть — он увидит, что есть желающие, и сможет учесть это в следующий раз.</p>
+    <label class="field">
+      <span>Имя</span>
+      <input type="text" id="interestName" placeholder="Даша Иванова" autocomplete="name">
+    </label>
+    <label class="field">
+      <span>Корпоративная почта</span>
+      <input type="email" id="interestEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
+    </label>
+    <button class="btn-primary" id="confirmInterest" type="button">Отправить</button>
+    <p class="modal-error" id="interestError" hidden></p>
   </div>
 </div>
 

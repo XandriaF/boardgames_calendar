@@ -20,6 +20,13 @@ function computeActive(key) {
   return Object.values(byEmail).filter(r => r.status === 'Записан');
 }
 
+function computeInterested(key) {
+  const rows = signups.filter(s => (s.date + '|' + (s.time||'') + '|' + s.game) === key);
+  const byEmail = {};
+  rows.forEach(r => { byEmail[r.email] = r; });
+  return Object.values(byEmail).filter(r => r.status === 'Интересуюсь');
+}
+
 // each signup takes up 1 + guests seats
 function headcountOf(active) {
   return active.reduce((sum, r) => sum + 1 + (r.guests || 0), 0);
@@ -32,13 +39,14 @@ function publicEvents() {
     const headcount = headcountOf(active);
     const isFull = e.maxParticipants ? headcount >= e.maxParticipants : false;
     const isOpen = e.status === 'Набор открыт' && !isFull;
+    const interested = computeInterested(key);
     return {
       id: key, date: e.date, time: e.time, city: e.city, format: e.format, game: e.game,
       place: e.place, organizer: e.organizer, maxParticipants: e.maxParticipants, status: e.status,
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
       teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '', imageUrl: e.imageUrl || '',
       participantsCount: headcount, participantNames: active.map(a => a.name + (a.guests ? ' +' + a.guests : '')),
-      isOpen, isFull
+      isOpen, isFull, interestCount: interested.length
     };
   });
 }
@@ -96,6 +104,16 @@ const server = http.createServer((req, res) => {
         }
         signups.push({ date: payload.date, time: payload.time, game: payload.game, name: payload.name, email, status: 'Записан', guests });
         res.end(JSON.stringify({ ok: true, participantsCount: headcountOf(computeActive(key)) }));
+        return;
+      }
+      if (payload.action === 'interest') {
+        if (!payload.date || !payload.game || !payload.name || !email) {
+          res.end(JSON.stringify({ ok: false, error: 'missing fields' })); return;
+        }
+        const activeMine = computeActive(key).find(a => a.email === email);
+        if (activeMine) { res.end(JSON.stringify({ ok: true })); return; }
+        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: payload.name, email, status: 'Интересуюсь', guests: 0 });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
       if (payload.action === 'cancel') {

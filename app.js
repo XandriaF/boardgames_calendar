@@ -8,7 +8,9 @@
     registeredIds: [],     // event ids current user is signed up for
     activeCity: 'Все',
     activeFormat: 'Все',
+    showPast: false,       // past events are hidden by default, revealed via togglePastBtn
     pendingSignupEvent: null,
+    pendingInterestEvent: null,
     hashHandled: false
   };
 
@@ -155,7 +157,14 @@
   function passesFilter(ev) {
     var cityOk = state.activeCity === 'Все' || ev.city === state.activeCity;
     var formatOk = state.activeFormat === 'Все' || ev.format === state.activeFormat;
-    return cityOk && formatOk;
+    var pastOk = state.showPast || !isPastEvent(ev);
+    return cityOk && formatOk && pastOk;
+  }
+
+  function renderPastToggle() {
+    var btn = document.getElementById('togglePastBtn');
+    btn.textContent = state.showPast ? 'скрыть прошедшие' : 'показать прошедшие';
+    btn.classList.toggle('active', state.showPast);
   }
 
   function renderGrid() {
@@ -262,9 +271,23 @@
     var namesText = ev.participantNames && ev.participantNames.length ? ' — ' + ev.participantNames.join(', ') : '';
     participants.innerHTML = '<b>' + countText + '</b><span class="names">' + escapeHtml(namesText) + '</span>';
 
+    var interestLine = null;
+    if (ev.interestCount) {
+      interestLine = document.createElement('div');
+      interestLine.className = 'card-interest';
+      interestLine.textContent = '🙋 ещё ' + ev.interestCount + ' ' + pluralizeWant(ev.interestCount) + ' сыграть в другое время';
+    }
+
+    var isRegistered = state.registeredIds.indexOf(ev.id) !== -1;
     var actions = document.createElement('div');
     actions.className = 'card-actions';
     actions.appendChild(renderActionButton(ev));
+    // "проявить интерес" -- for people this exact date/time/place doesn't suit, but who'd
+    // like to play the game some other time; not shown once already signed up or for
+    // past/cancelled events, since it wouldn't mean anything there
+    if (!past && ev.status !== 'Отменено' && !isRegistered) {
+      actions.appendChild(renderInterestButton(ev));
+    }
 
     card.appendChild(top);
     if (image) card.appendChild(image);
@@ -273,8 +296,24 @@
     card.appendChild(meta);
     if (links) card.appendChild(links);
     card.appendChild(participants);
+    if (interestLine) card.appendChild(interestLine);
     card.appendChild(actions);
     return card;
+  }
+
+  function pluralizeWant(n) {
+    var mod10 = n % 10, mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'хочет';
+    return 'хотят';
+  }
+
+  function renderInterestButton(ev) {
+    var btn = document.createElement('button');
+    btn.className = 'btn-ghost';
+    btn.type = 'button';
+    btn.textContent = 'Проявить интерес';
+    btn.addEventListener('click', function () { openInterestModal(ev); });
+    return btn;
   }
 
   function metaLine(label, value) {
@@ -386,6 +425,7 @@
     btn.addEventListener('click', function () {
       hideOverlay('whoAmIOverlay');
       hideOverlay('signupOverlay');
+      hideOverlay('interestOverlay');
     });
   });
   document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
@@ -489,6 +529,58 @@
       });
   }
 
+  function openInterestModal(ev) {
+    state.pendingInterestEvent = ev;
+    var me = getMe();
+    document.getElementById('interestTitle').textContent = 'Проявить интерес: ' + ev.game;
+    document.getElementById('interestName').value = (me && me.name) || '';
+    document.getElementById('interestEmail').value = (me && me.email) || '';
+    document.getElementById('interestError').hidden = true;
+    showOverlay('interestOverlay');
+  }
+
+  document.getElementById('confirmInterest').addEventListener('click', function () {
+    var ev = state.pendingInterestEvent;
+    if (!ev) return;
+    var name = document.getElementById('interestName').value.trim();
+    var email = document.getElementById('interestEmail').value.trim();
+    var errEl = document.getElementById('interestError');
+    if (!name || !email.includes('@')) {
+      errEl.textContent = 'Укажите имя и корпоративную почту';
+      errEl.hidden = false;
+      return;
+    }
+    var btn = document.getElementById('confirmInterest');
+    btn.disabled = true;
+    btn.textContent = 'Отправляем…';
+
+    apiPost({ action: 'interest', date: ev.date, time: ev.time, game: ev.game, name: name, email: email })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.textContent = 'Отправить';
+        if (!res.ok) {
+          errEl.textContent = 'Не получилось отправить, попробуйте ещё раз';
+          errEl.hidden = false;
+          return;
+        }
+        setMe({ name: name, email: email });
+        hideOverlay('interestOverlay');
+        refresh();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Отправить';
+        errEl.textContent = 'Ошибка сети, попробуйте ещё раз';
+        errEl.hidden = false;
+      });
+  });
+
+  document.getElementById('togglePastBtn').addEventListener('click', function () {
+    state.showPast = !state.showPast;
+    renderPastToggle();
+    renderGrid();
+  });
+
   // ---------- init ----------
   function showStatus(msg) {
     var el = document.getElementById('status');
@@ -497,6 +589,7 @@
   }
 
   renderWhoAmI(); // show any saved identity immediately, even before the network call resolves
+  renderPastToggle();
 
   if (!API_URL || API_URL.indexOf('ВСТАВЬТЕ') !== -1) {
     document.getElementById('loadingState').textContent = 'Сайт ещё не подключён к таблице. Заполните APPS_SCRIPT_URL в config.js — см. SETUP.md.';

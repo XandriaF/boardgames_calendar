@@ -66,6 +66,9 @@ function doPost(e) {
     if (action === 'cancel') {
       return jsonOutput(handleCancel(body));
     }
+    if (action === 'interest') {
+      return jsonOutput(handleInterest(body));
+    }
     if (action === 'createEvent') {
       return jsonOutput(handleCreateEvent(body));
     }
@@ -111,6 +114,7 @@ function getPublicEvents(signups) {
     var participantsCount = headcountOf(active); // считает и гостей (+1/+2/...), не только строки записи
     var isFull = maxParticipants ? participantsCount >= Number(maxParticipants) : false;
     var isOpen = status === 'Набор открыт' && !isFull;
+    var interested = (signups[key] || []).filter(function (p) { return p.status === 'Интересуюсь'; });
 
     events.push({
       id: key,
@@ -133,7 +137,8 @@ function getPublicEvents(signups) {
       participantsCount: participantsCount,
       participantNames: active.map(function (p) { return p.name + (p.guests ? ' +' + p.guests : ''); }),
       isOpen: isOpen,
-      isFull: isFull
+      isFull: isFull,
+      interestCount: interested.length
     });
   }
 
@@ -196,6 +201,28 @@ function handleCancel(body) {
   var signups = getAllSignupStates();
   var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
   return { ok: true, participantsCount: headcountOf(active) };
+}
+
+// «проявить интерес» -- для тех, кому конкретная дата/время/место не подходят, но кто
+// хотел бы сыграть в эту игру в другой раз. Пишется той же строкой в «Записи», просто с
+// отдельным статусом «Интересуюсь»; не занимает место и не требует открытой записи --
+// сигнал видит организатор (participantsCount/isFull это не затрагивает).
+function handleInterest(body) {
+  var date = body.date, time = body.time, game = body.game;
+  var name = (body.name || '').trim();
+  var email = normalizeEmail(body.email || '');
+  if (!date || !game || !name || !email) return { ok: false, error: 'missing fields' };
+
+  var key = eventKey(date, time, game);
+  var signups = getAllSignupStates();
+  var mine = (signups[key] || []).filter(function (p) { return p.email === email; })[0];
+  // если человек уже реально записан на этот слот, «интерес» тут ни при чём -- не даём
+  // случайно затереть активную запись строкой «Интересуюсь» (тот же email+ключ = latest
+  // wins в getAllSignupStates)
+  if (mine && mine.status === 'Записан') return { ok: true };
+
+  appendSignupRow(date, time, game, name, email, 'Интересуюсь', 0);
+  return { ok: true };
 }
 
 // ---------- organizer: create event ----------

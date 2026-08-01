@@ -29,9 +29,10 @@ async function waitFor(cond, timeout = 5000, step = 50) {
 
   const doc = window.document;
 
-  // 1. wait for events to render (4 cards expected, all statuses public)
-  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 4);
-  console.log('PASS: 4 cards rendered');
+  // 1. wait for events to render -- 3 cards expected: the past-dated 4th event
+  // (Корона из пепла) is hidden by default now, until "показать прошедшие" is clicked
+  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
+  console.log('PASS: 3 cards rendered (past event hidden by default)');
 
   // 2. filter chips populated dynamically from data
   const cityChips = Array.from(doc.getElementById('cityChips').querySelectorAll('.chip')).map(c => c.textContent);
@@ -50,7 +51,7 @@ async function waitFor(cond, timeout = 5000, step = 50) {
 
   // reset filter back to "Все"
   Array.from(doc.getElementById('cityChips').querySelectorAll('.chip')).find(c => c.textContent === 'Все').click();
-  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 4);
+  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
 
   // 4. cancelled event shows disabled "Отменено" button, no signup possible
   const cards = Array.from(doc.querySelectorAll('.card'));
@@ -150,8 +151,23 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (statTexts[0] !== '4') throw new Error('expected total events stat = 4, got ' + statTexts[0]);
   console.log('PASS: stats row rendered ->', statTexts);
 
-  // 10. a past-dated event (2026-07-20, before the sandbox's "today" 2026-07-31) is marked
-  // past even though its own status is "Набор открыт", is disabled, and floats to the bottom
+  // 10. past events are hidden by default, revealed only via the "показать прошедшие" toggle.
+  // The past-dated event (2026-07-20, before the sandbox's "today" 2026-07-31) is marked past
+  // even though its own status is "Набор открыт", is disabled, and floats to the bottom once shown.
+  const togglePastBtn = doc.getElementById('togglePastBtn');
+  if (togglePastBtn.textContent !== 'показать прошедшие') {
+    throw new Error('togglePastBtn should start as "показать прошедшие", got: ' + togglePastBtn.textContent);
+  }
+  if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Корона из пепла')) {
+    throw new Error('past event should not render before the toggle is clicked');
+  }
+  console.log('PASS: past event stays hidden until "показать прошедшие" is clicked');
+
+  togglePastBtn.click();
+  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 4);
+  if (togglePastBtn.textContent !== 'скрыть прошедшие') throw new Error('togglePastBtn label should flip after click: ' + togglePastBtn.textContent);
+  console.log('PASS: "показать прошедшие" reveals the past event and flips the button label');
+
   const pastCard = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Корона из пепла');
   if (!pastCard.classList.contains('is-past')) throw new Error('past card missing is-past class');
   const pastBadge = pastCard.querySelector('.badge');
@@ -160,6 +176,9 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   const pastBtn = pastCard.querySelector('button');
   if (!pastBtn.disabled || pastBtn.textContent !== 'Уже прошло') throw new Error('past card button wrong: ' + pastBtn.textContent);
+  if (pastCard.querySelector('.card-actions').children.length !== 1) {
+    throw new Error('past event should not also show an interest button, only the disabled primary button');
+  }
   console.log('PASS: past event (still "Набор открыт" in the data) shown as "Уже прошло" and disabled');
 
   const gridOrder = Array.from(doc.querySelectorAll('.card')).map(c => c.querySelector('.card-game').textContent);
@@ -169,6 +188,12 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   // nearest-event stat must skip the past event and still point at the actual next upcoming one
   if (!statTexts[2].includes('7 августа')) throw new Error('nearest-event stat should skip the past event, got: ' + statTexts[2]);
   console.log('PASS: "ближайшее" stat correctly skips the past event');
+
+  // toggling back off hides the past event again
+  togglePastBtn.click();
+  await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
+  if (togglePastBtn.textContent !== 'показать прошедшие') throw new Error('togglePastBtn label should flip back: ' + togglePastBtn.textContent);
+  console.log('PASS: "скрыть прошедшие" hides the past event again');
 
   // 11. sign up once more, then simulate a fresh page load with a saved identity: confirm
   // events + registeredIds now arrive in a single request instead of a second action=myStatus call
@@ -189,7 +214,7 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   dom3.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
   dom3.window.eval(appJs);
   const doc3 = dom3.window.document;
-  await waitFor(() => doc3.getElementById('eventsGrid').querySelectorAll('.card').length === 4);
+  await waitFor(() => doc3.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
   const draconCard3 = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   if (draconCard3.querySelector('button').textContent !== 'Отменить запись') {
     throw new Error('fresh load with saved identity should immediately show "Отменить запись" via bundled registeredIds');
@@ -239,6 +264,40 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   if (!draconCard5.classList.contains('is-full')) throw new Error('event should carry is-full once guests fill the remaining seats');
   console.log('PASS: event correctly marked full (is-full) once guests fill the remaining seats');
+
+  // 13. "проявить интерес" -- a secondary way to signal wanting to play without needing an
+  // open seat right now. Hidden once already registered for that exact event; otherwise
+  // works even on a full/closed event, and must not affect participantsCount/isFull.
+  const draconCardForInterestCheck = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
+  if (Array.from(draconCardForInterestCheck.querySelectorAll('button')).some(b => b.textContent === 'Проявить интерес')) {
+    throw new Error('interest button should be hidden once already registered for the event');
+  }
+  console.log('PASS: interest button hidden for an event the current user is already registered for');
+
+  const fullCardForInterest = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+  const interestBtn = Array.from(fullCardForInterest.querySelectorAll('button')).find(b => b.textContent === 'Проявить интерес');
+  if (!interestBtn) throw new Error('interest button missing on a full, not-registered event');
+  interestBtn.click();
+  await waitFor(() => !doc.getElementById('interestOverlay').hidden);
+  doc.getElementById('interestName').value = 'Интересующийся Игрок';
+  doc.getElementById('interestEmail').value = 'interested.player@beeline.ru';
+  doc.getElementById('confirmInterest').click();
+  await waitFor(() => doc.getElementById('interestOverlay').hidden === true, 5000);
+  console.log('PASS: interest modal submits and closes');
+
+  await waitFor(() => {
+    const card = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+    return card && card.querySelector('.card-interest');
+  });
+  const cardAfterInterest = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+  const interestLineText = cardAfterInterest.querySelector('.card-interest').textContent;
+  if (!interestLineText.includes('ещё 1 хочет сыграть в другое время')) throw new Error('interest count line wrong: ' + interestLineText);
+  console.log('PASS: interest count shown on card ->', interestLineText);
+
+  if (cardAfterInterest.querySelector('.card-participants b').textContent !== '0 записалось') {
+    throw new Error('expressing interest must not affect participantsCount, got: ' + cardAfterInterest.querySelector('.card-participants b').textContent);
+  }
+  console.log('PASS: expressing interest does not affect participantsCount');
 
   console.log('\nALL TESTS PASSED');
   process.exit(0);
