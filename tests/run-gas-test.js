@@ -76,6 +76,42 @@ const sandbox = {
     createTextOutput(text) {
       return { _text: text, setMimeType() { return this; } };
     }
+  },
+  // stubbed BGG lookup: id=999 "succeeds" with a mock cover image, anything else 404s,
+  // so fetchBggImage()'s error handling is exercised too
+  UrlFetchApp: {
+    fetch(url) {
+      if (url.indexOf('id=999') !== -1) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => '<items><item id="999"><image>https://cf.geekdo-images.com/mock/999.jpg</image></item></items>'
+        };
+      }
+      return { getResponseCode: () => 404, getContentText: () => '' };
+    }
+  },
+  // minimal shim of just the XmlService methods fetchBggImage() actually calls
+  // (getRootElement -> getChild('item') -> getChild('image') -> getText), backed by a
+  // small regex instead of a real XML parser -- enough to exercise the real Code.gs logic
+  XmlService: {
+    parse(text) {
+      return {
+        getRootElement() {
+          return {
+            getChild(tag) {
+              if (tag !== 'item') return null;
+              const m = text.match(/<image>([^<]*)<\/image>/);
+              return {
+                getChild(t2) {
+                  if (t2 !== 'image' || !m) return null;
+                  return { getText: () => m[1] };
+                }
+              };
+            }
+          };
+        }
+      };
+    }
   }
 };
 
@@ -218,6 +254,39 @@ check('createEvent wrote setting into column O', newRow[14] === 'космос, �
 check('createEvent wrote imageUrl into column P', newRow[15] === 'https://example.com/mars.jpg');
 check('createEvent date round-trips via formatDate to 2026-09-10',
   sandbox.formatDate ? true : true); // sanity placeholder, checked below via doGet
+
+// ---- BGG cover auto-fetch ----
+// no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
+// Code.gs should fetch and use that cover image
+const ceBgg = callDoPost({
+  action: 'createEvent', date: '2026-09-13', time: '18:00', city: 'Москва', format: 'Евро',
+  game: 'Игра с BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name'
+});
+check('createEvent with only a bggUrl still ok', ceBgg.ok === true);
+const rowBgg = eventsRows[eventsRows.length - 1];
+check('createEvent auto-fetched the BGG cover image into column P',
+  rowBgg[15] === 'https://cf.geekdo-images.com/mock/999.jpg');
+
+// a manually-provided imageUrl must win over the BGG auto-fetch, not get overwritten
+const ceBggManual = callDoPost({
+  action: 'createEvent', date: '2026-09-14', time: '18:00', city: 'Москва', format: 'Евро',
+  game: 'Игра с картинкой и BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name', imageUrl: 'https://example.com/manual.jpg'
+});
+check('createEvent with both imageUrl and bggUrl keeps the manual image', ceBggManual.ok === true);
+const rowBggManual = eventsRows[eventsRows.length - 1];
+check('manual imageUrl is not overwritten by the BGG auto-fetch', rowBggManual[15] === 'https://example.com/manual.jpg');
+
+// bggUrl pointing at a game the stubbed API does NOT know (404) -- must not crash, just no image
+const ceBggMiss = callDoPost({
+  action: 'createEvent', date: '2026-09-15', time: '18:00', city: 'Москва', format: 'Евро',
+  game: 'Игра без обложки на BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  bggUrl: 'https://boardgamegeek.com/boardgame/111111/unknown-game'
+});
+check('createEvent with a BGG lookup miss still succeeds (best-effort, no crash)', ceBggMiss.ok === true);
+const rowBggMiss = eventsRows[eventsRows.length - 1];
+check('failed BGG lookup leaves imageUrl empty rather than crashing', rowBggMiss[15] === '');
 
 const r4 = callDoGet({ action: 'events' });
 const created = r4.events.find(e => e.game === 'Терраформирование Марса');

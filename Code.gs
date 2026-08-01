@@ -220,6 +220,11 @@ function handleCreateEvent(body) {
     return { ok: false, error: 'duplicate' };
   }
 
+  // если картинку не указали руками, но дали ссылку на BGG -- пробуем сами достать обложку
+  if (!imageUrl && bggUrl) {
+    imageUrl = fetchBggImage(bggUrl);
+  }
+
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   sheet.appendRow([
     parseISODate(date),
@@ -244,6 +249,27 @@ function handleCreateEvent(body) {
   sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
 
   return { ok: true, id: eventKey(date, time, game) };
+}
+
+// пытается достать обложку игры с BoardGameGeek по ссылке через официальный XML API2 --
+// сделано именно на стороне Apps Script (а не в браузере), потому что у API BGG нет
+// CORS-заголовков и прямой запрос из браузера был бы заблокирован. Любая проблема (плохая
+// ссылка, BGG недоступен, неожиданный ответ) просто оставляет картинку пустой -- не должна
+// мешать созданию самого мероприятия.
+function fetchBggImage(bggUrl) {
+  try {
+    var match = String(bggUrl).match(/\/boardgame\/(\d+)/) || String(bggUrl).match(/[?&]id=(\d+)/);
+    if (!match) return '';
+    var id = match[1];
+    var resp = UrlFetchApp.fetch('https://boardgamegeek.com/xmlapi2/thing?id=' + id, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return '';
+    var item = XmlService.parse(resp.getContentText()).getRootElement().getChild('item');
+    if (!item) return '';
+    var imageEl = item.getChild('image');
+    return imageEl ? imageEl.getText().trim() : '';
+  } catch (err) {
+    return '';
+  }
 }
 
 function getMyRegistrations(email, signups) {
