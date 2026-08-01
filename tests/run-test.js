@@ -197,6 +197,49 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (fetchCount !== 1) throw new Error('expected exactly 1 network request for an identity-aware initial load, got ' + fetchCount);
   console.log('PASS: fresh load with saved identity resolves registration status in a single request (fetchCount=1)');
 
+  // 12. guests (+1/+2): free the event back to 0/2, then confirm the guest dropdown caps
+  // itself to remaining capacity and that a guest signup consumes multiple seats at once
+  draconCard3.querySelector('button').click(); // "Отменить запись"
+  await waitFor(() => {
+    const card = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
+    return card && card.querySelector('.card-participants b').textContent === '0 из 2';
+  });
+  console.log('PASS: cancel frees the event back to 0 из 2');
+
+  const draconCard4 = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
+  draconCard4.querySelector('button').click(); // "Записаться"
+  await waitFor(() => !doc3.getElementById('signupOverlay').hidden);
+  const guestOptions = Array.from(doc3.getElementById('signupGuests').options).map(o => o.value);
+  if (JSON.stringify(guestOptions) !== JSON.stringify(['0', '1'])) {
+    throw new Error('guest dropdown should offer only 0 and +1 (2 seats remaining), got: ' + guestOptions);
+  }
+  console.log('PASS: guest dropdown limited to remaining capacity ->', guestOptions);
+
+  doc3.getElementById('signupName').value = 'Гость Тестов';
+  doc3.getElementById('signupEmail').value = 'guest.test@beeline.ru';
+  doc3.getElementById('signupGuests').value = '1';
+  doc3.getElementById('confirmSignup').click();
+  await waitFor(() => doc3.getElementById('signupOverlay').hidden === true, 5000);
+
+  await waitFor(() => {
+    const card = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
+    return card && card.querySelector('.card-participants b').textContent === '2 из 2';
+  });
+  const draconCard5 = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
+  const guestNamesText = draconCard5.querySelector('.card-participants .names').textContent;
+  if (!guestNamesText.includes('Гость Тестов +1')) throw new Error('participant names should show guest count, got: ' + guestNamesText);
+  console.log('PASS: signup with +1 guest occupies 2 seats and shows "Имя +1" in participant list ->', guestNamesText);
+
+  // the signup form's identity (guest.test@beeline.ru) is now the "current user" (setMe()
+  // runs on every successful signup), and they themselves are registered, so the button
+  // shows "Отменить запись" for them even though the event is full for anyone else
+  const draconBtnAfterGuestFill = draconCard5.querySelector('button');
+  if (draconBtnAfterGuestFill.textContent !== 'Отменить запись') {
+    throw new Error('registered user should see "Отменить запись" even on a now-full event, got: ' + draconBtnAfterGuestFill.textContent);
+  }
+  if (!draconCard5.classList.contains('is-full')) throw new Error('event should carry is-full once guests fill the remaining seats');
+  console.log('PASS: event correctly marked full (is-full) once guests fill the remaining seats');
+
   console.log('\nALL TESTS PASSED');
   process.exit(0);
 })().catch(err => {

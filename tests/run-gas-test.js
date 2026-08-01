@@ -20,9 +20,9 @@ const eventsRows = [
   [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', ''],
 ];
 
-// Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус
+// Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
 let signupRows = [
-  ['Timestamp','Дата','Время','Игра','Имя','Корп. почта','Статус'],
+  ['Timestamp','Дата','Время','Игра','Имя','Корп. почта','Статус','Гости'],
 ];
 
 function makeSheetStub(rows) {
@@ -156,6 +156,15 @@ const r3 = callDoGet({ action: 'events' });
 const dracon3 = r3.events.find(e => e.game === 'Таверна Красный дракон');
 check('after cancel: isOpen=true again, count=1, only Игрок2 listed', dracon3.isOpen === true && dracon3.participantsCount === 1 && dracon3.participantNames[0] === 'Игрок2');
 
+// guests (+1/+2): only 1 seat remains (Игрок2 registered, max 2) -- a +1 guest request
+// needs 2 seats and must be rejected, but a plain (0-guest) signup should fill exactly to 2/2
+const sGuestTooMany = callDoPost({ action: 'signup', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Игрок3', email: 'p3@beeline.ru', guests: 1 });
+check('signup with +1 guest rejected when only 1 seat remains', sGuestTooMany.ok === false && sGuestTooMany.error === 'full');
+const sGuestFits = callDoPost({ action: 'signup', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Игрок3', email: 'p3@beeline.ru', guests: 0 });
+check('signup without guests fills the last seat, count=2', sGuestFits.ok === true && sGuestFits.participantsCount === 2);
+const cGuestUndo = callDoPost({ action: 'cancel', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', email: 'p3@beeline.ru' });
+check('cleanup cancel ok', cGuestUndo.ok === true);
+
 // myStatus
 const my2 = callDoGet({ action: 'myStatus', email: 'p2@beeline.ru' });
 check('myStatus for p2 includes the dracon event', my2.ok && my2.registered.includes('2026-08-07|18:00|Таверна Красный дракон'));
@@ -178,6 +187,16 @@ check('signup on cancelled event rejected', s4.ok === false && s4.error === 'eve
 // must still match it correctly against the clean "14:59" string a real client would send
 const sBug = callDoPost({ action: 'signup', date: '2026-09-20', time: '14:59', game: 'Тест Время-Баг', name: 'ИгрокБаг', email: 'bug@beeline.ru' });
 check('signup succeeds against an event whose Время cell was corrupted into a Date object', sBug.ok === true && sBug.participantsCount === 1);
+
+// this event has maxParticipants=4; ИгрокБаг already used 1 seat, so ИгрокБаг2 bringing
+// +2 guests (3 seats) should fit exactly (1 + 3 = 4)
+const sBugGuest = callDoPost({ action: 'signup', date: '2026-09-20', time: '14:59', game: 'Тест Время-Баг', name: 'ИгрокБаг2', email: 'bug2@beeline.ru', guests: 2 });
+check('signup with +2 guests succeeds, headcount reflects all 3 extra seats', sBugGuest.ok === true && sBugGuest.participantsCount === 4);
+const rBugGuest = callDoGet({ action: 'events' });
+const bugEv = rBugGuest.events.find(e => e.game === 'Тест Время-Баг');
+check('event with a guest signup shows correct headcount, isFull, and "Имя +N" in participant names',
+  bugEv.participantsCount === 4 && bugEv.isFull === true &&
+  bugEv.participantNames.includes('ИгрокБаг') && bugEv.participantNames.includes('ИгрокБаг2 +2'));
 
 // ---- createEvent (organizer form) ----
 const before = eventsRows.length;

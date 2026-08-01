@@ -108,7 +108,7 @@ function getPublicEvents(signups) {
     var dateStr = formatDate(date);
     var key = eventKey(dateStr, time, game);
     var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
-    var participantsCount = active.length;
+    var participantsCount = headcountOf(active); // считает и гостей (+1/+2/...), не только строки записи
     var isFull = maxParticipants ? participantsCount >= Number(maxParticipants) : false;
     var isOpen = status === 'Набор открыт' && !isFull;
 
@@ -131,7 +131,7 @@ function getPublicEvents(signups) {
       setting: setting || '',
       imageUrl: imageUrl || '',
       participantsCount: participantsCount,
-      participantNames: active.map(function (p) { return p.name; }),
+      participantNames: active.map(function (p) { return p.name + (p.guests ? ' +' + p.guests : ''); }),
       isOpen: isOpen,
       isFull: isFull
     });
@@ -145,10 +145,18 @@ function getPublicEvents(signups) {
 
 // ---------- signups ----------
 
+// участник может привести с собой гостей (+1/+2/...) -- каждый гость занимает
+// отдельное место, поэтому "занято мест" считается по headcount (человек + гости),
+// а не по числу строк записи
+function headcountOf(active) {
+  return active.reduce(function (sum, p) { return sum + 1 + (p.guests || 0); }, 0);
+}
+
 function handleSignup(body) {
   var date = body.date, time = body.time, game = body.game;
   var name = (body.name || '').trim();
   var email = normalizeEmail(body.email || '');
+  var guests = Math.max(0, Math.min(10, Math.floor(Number(body.guests) || 0)));
 
   if (!date || !game || !name || !email) {
     return { ok: false, error: 'missing fields' };
@@ -161,13 +169,15 @@ function handleSignup(body) {
   var signups = getAllSignupStates();
   var key = eventKey(date, time, game);
   var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
+  var headcount = headcountOf(active);
+  var requested = 1 + guests;
 
-  if (eventInfo.maxParticipants && active.length >= Number(eventInfo.maxParticipants)) {
+  if (eventInfo.maxParticipants && headcount + requested > Number(eventInfo.maxParticipants)) {
     return { ok: false, error: 'full' };
   }
 
-  appendSignupRow(date, time, game, name, email, 'Записан');
-  return { ok: true, participantsCount: active.length + 1 };
+  appendSignupRow(date, time, game, name, email, 'Записан', guests);
+  return { ok: true, participantsCount: headcount + requested };
 }
 
 function handleCancel(body) {
@@ -175,11 +185,11 @@ function handleCancel(body) {
   var email = normalizeEmail(body.email || '');
   if (!date || !game || !email) return { ok: false, error: 'missing fields' };
 
-  appendSignupRow(date, time, game, '', email, 'Отменено');
+  appendSignupRow(date, time, game, '', email, 'Отменено', 0);
   var signups = getAllSignupStates();
   var key = eventKey(date, time, game);
   var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
-  return { ok: true, participantsCount: active.length };
+  return { ok: true, participantsCount: headcountOf(active) };
 }
 
 // ---------- organizer: create event ----------
@@ -267,7 +277,7 @@ function findEvent(date, time, game) {
   return null;
 }
 
-// returns { "date|time|game": [ {name, email, status}, ... in chronological order ] }
+// returns { "date|time|game": [ {name, email, status, guests}, ... in chronological order ] }
 function getAllSignupStates() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SIGNUPS);
   var values = sheet.getDataRange().getValues();
@@ -275,13 +285,14 @@ function getAllSignupStates() {
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     var date = row[1], time = formatTimeVal(row[2]), game = row[3], name = row[4], email = row[5], status = row[6];
+    var guests = row[7]; // «Гости» -- сколько человек участник приводит с собой (+1/+2/...)
     if (!date || !game || !email) continue;
     var dateStr = date instanceof Date ? formatDate(date) : String(date);
     var key = eventKey(dateStr, time, game);
     if (!map[key]) map[key] = [];
-    map[key].push({ name: name, email: normalizeEmail(email), status: status });
+    map[key].push({ name: name, email: normalizeEmail(email), status: status, guests: Number(guests) || 0 });
   }
-  // collapse to latest status per email, keep name from latest non-empty
+  // collapse to latest status per email, keep name/guests from latest entry
   var collapsed = {};
   Object.keys(map).forEach(function (key) {
     var byEmail = {};
@@ -293,9 +304,9 @@ function getAllSignupStates() {
   return collapsed;
 }
 
-function appendSignupRow(date, time, game, name, email, status) {
+function appendSignupRow(date, time, game, name, email, status, guests) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_SIGNUPS);
-  sheet.appendRow([new Date(), date, time, game, name, email, status]);
+  sheet.appendRow([new Date(), date, time, game, name, email, status, guests || 0]);
   // same auto-time-conversion guard as the Мероприятия sheet's «Время» column
   sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@');
 }

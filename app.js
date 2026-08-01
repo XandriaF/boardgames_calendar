@@ -413,6 +413,19 @@
     refresh();
   });
 
+  // limits the "с гостями" dropdown to however many spots are actually left, so people
+  // can't pick +3 when only 2 seats remain (server still enforces this too, as a backstop)
+  function renderGuestOptions(ev) {
+    var select = document.getElementById('signupGuests');
+    var remaining = ev.maxParticipants ? Math.max(0, ev.maxParticipants - ev.participantsCount) : 5;
+    var maxGuests = Math.max(0, Math.min(4, remaining - 1));
+    var options = ['<option value="0">без гостей</option>'];
+    for (var g = 1; g <= maxGuests; g++) {
+      options.push('<option value="' + g + '">+' + g + '</option>');
+    }
+    select.innerHTML = options.join('');
+  }
+
   function openSignupModal(ev) {
     state.pendingSignupEvent = ev;
     var me = getMe();
@@ -421,6 +434,7 @@
     document.getElementById('signupName').value = (me && me.name) || '';
     document.getElementById('signupEmail').value = (me && me.email) || '';
     document.getElementById('signupError').hidden = true;
+    renderGuestOptions(ev);
     showOverlay('signupOverlay');
   }
 
@@ -439,7 +453,8 @@
     btn.disabled = true;
     btn.textContent = 'Записываем…';
 
-    apiPost({ action: 'signup', date: ev.date, time: ev.time, game: ev.game, name: name, email: email })
+    var guests = Number(document.getElementById('signupGuests').value) || 0;
+    apiPost({ action: 'signup', date: ev.date, time: ev.time, game: ev.game, name: name, email: email, guests: guests })
       .then(function (res) {
         btn.disabled = false;
         btn.textContent = 'Записаться';

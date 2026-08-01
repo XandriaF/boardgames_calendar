@@ -20,18 +20,24 @@ function computeActive(key) {
   return Object.values(byEmail).filter(r => r.status === 'Записан');
 }
 
+// each signup takes up 1 + guests seats
+function headcountOf(active) {
+  return active.reduce((sum, r) => sum + 1 + (r.guests || 0), 0);
+}
+
 function publicEvents() {
   return events.filter(e => ['Набор открыт','Набрано','Отменено'].includes(e.status)).map(e => {
     const key = eventKey(e);
     const active = computeActive(key);
-    const isFull = e.maxParticipants ? active.length >= e.maxParticipants : false;
+    const headcount = headcountOf(active);
+    const isFull = e.maxParticipants ? headcount >= e.maxParticipants : false;
     const isOpen = e.status === 'Набор открыт' && !isFull;
     return {
       id: key, date: e.date, time: e.time, city: e.city, format: e.format, game: e.game,
       place: e.place, organizer: e.organizer, maxParticipants: e.maxParticipants, status: e.status,
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
       teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '', imageUrl: e.imageUrl || '',
-      participantsCount: active.length, participantNames: active.map(a => a.name),
+      participantsCount: headcount, participantNames: active.map(a => a.name + (a.guests ? ' +' + a.guests : '')),
       isOpen, isFull
     };
   });
@@ -83,14 +89,18 @@ const server = http.createServer((req, res) => {
         if (!ev) { res.end(JSON.stringify({ ok: false, error: 'event not found' })); return; }
         if (ev.status === 'Отменено') { res.end(JSON.stringify({ ok: false, error: 'event cancelled' })); return; }
         const active = computeActive(key);
-        if (ev.maxParticipants && active.length >= ev.maxParticipants) { res.end(JSON.stringify({ ok: false, error: 'full' })); return; }
-        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: payload.name, email, status: 'Записан' });
-        res.end(JSON.stringify({ ok: true, participantsCount: computeActive(key).length }));
+        const guests = Math.max(0, Math.min(10, Math.floor(Number(payload.guests) || 0)));
+        const requested = 1 + guests;
+        if (ev.maxParticipants && headcountOf(active) + requested > ev.maxParticipants) {
+          res.end(JSON.stringify({ ok: false, error: 'full' })); return;
+        }
+        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: payload.name, email, status: 'Записан', guests });
+        res.end(JSON.stringify({ ok: true, participantsCount: headcountOf(computeActive(key)) }));
         return;
       }
       if (payload.action === 'cancel') {
-        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: '', email, status: 'Отменено' });
-        res.end(JSON.stringify({ ok: true, participantsCount: computeActive(key).length }));
+        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: '', email, status: 'Отменено', guests: 0 });
+        res.end(JSON.stringify({ ok: true, participantsCount: headcountOf(computeActive(key)) }));
         return;
       }
       if (payload.action === 'createEvent') {
