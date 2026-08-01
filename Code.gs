@@ -185,9 +185,15 @@ function handleCancel(body) {
   var email = normalizeEmail(body.email || '');
   if (!date || !game || !email) return { ok: false, error: 'missing fields' };
 
-  appendSignupRow(date, time, game, '', email, 'Отменено', 0);
-  var signups = getAllSignupStates();
   var key = eventKey(date, time, game);
+  // клиент присылает только email -- достаём имя из их последней записи на эту игру,
+  // чтобы строка отмены в листе «Записи» не оставалась с пустым именем
+  var before = getAllSignupStates();
+  var mine = (before[key] || []).filter(function (p) { return p.email === email; })[0];
+  var name = mine ? mine.name : '';
+
+  appendSignupRow(date, time, game, name, email, 'Отменено', 0);
+  var signups = getAllSignupStates();
   var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
   return { ok: true, participantsCount: headcountOf(active) };
 }

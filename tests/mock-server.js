@@ -99,7 +99,11 @@ const server = http.createServer((req, res) => {
         return;
       }
       if (payload.action === 'cancel') {
-        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: '', email, status: 'Отменено', guests: 0 });
+        // pull the name from their latest row for this event, so the cancellation log
+        // entry doesn't end up with a blank name
+        const priorRows = signups.filter(s => (s.date + '|' + (s.time||'') + '|' + s.game) === key && s.email === email);
+        const priorName = priorRows.length ? priorRows[priorRows.length - 1].name : '';
+        signups.push({ date: payload.date, time: payload.time, game: payload.game, name: priorName, email, status: 'Отменено', guests: 0 });
         res.end(JSON.stringify({ ok: true, participantsCount: headcountOf(computeActive(key)) }));
         return;
       }

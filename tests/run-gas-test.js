@@ -192,6 +192,12 @@ const r3 = callDoGet({ action: 'events' });
 const dracon3 = r3.events.find(e => e.game === 'Таверна Красный дракон');
 check('after cancel: isOpen=true again, count=1, only Игрок2 listed', dracon3.isOpen === true && dracon3.participantsCount === 1 && dracon3.participantNames[0] === 'Игрок2');
 
+// the cancellation log row itself (client only sends email, not name) must still carry
+// the person's name in the «Записи» sheet, not leave it blank
+const cancelLogRow = signupRows[signupRows.length - 1];
+check('cancellation row in «Записи» keeps the person\'s name instead of leaving it blank',
+  cancelLogRow[4] === 'Игрок1' && cancelLogRow[6] === 'Отменено');
+
 // guests (+1/+2): only 1 seat remains (Игрок2 registered, max 2) -- a +1 guest request
 // needs 2 seats and must be rejected, but a plain (0-guest) signup should fill exactly to 2/2
 const sGuestTooMany = callDoPost({ action: 'signup', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', name: 'Игрок3', email: 'p3@beeline.ru', guests: 1 });
