@@ -16,6 +16,10 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   throw new Error('waitFor timed out');
 }
 
+function fireEvent(win, el, type) {
+  el.dispatchEvent(new win.Event(type, { bubbles: true, cancelable: true }));
+}
+
 (async () => {
   const html = fs.readFileSync(path.join(SITE, 'organizer.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/organizer.html', runScripts: 'outside-only', pretendToBeVisual: true });
@@ -32,27 +36,43 @@ async function waitFor(cond, timeout = 5000, step = 50) {
 
   const doc = window.document;
 
-  // fixed city suggestions should appear immediately, before the network call even resolves
-  const immediateCities = Array.from(doc.getElementById('cityList').children).map(o => o.value);
-  if (!immediateCities.includes('Ростов-на-Дону') || !immediateCities.includes('Онлайн (Board Game Arena)')) {
-    throw new Error('fixed city suggestions missing on first render, got: ' + immediateCities);
+  // fixed city dropdown renders immediately, including the trailing "Другой" catch-all option
+  const cityOptions = Array.from(doc.getElementById('fCity').options).map(o => o.value);
+  if (!cityOptions.includes('Онлайн') || !cityOptions.includes('Ростов-на-Дону') || cityOptions[cityOptions.length - 1] !== 'Другой') {
+    throw new Error('fixed city dropdown wrong, got: ' + cityOptions);
   }
-  console.log('PASS: fixed city suggestions render immediately ->', immediateCities);
+  console.log('PASS: fixed city dropdown renders immediately ->', cityOptions);
 
-  // once real events load, real city names (not in the fixed list) must be merged in too
-  await waitFor(() => Array.from(doc.getElementById('cityList').children).some(o => o.value === 'Санкт-Петербург'));
-  const mergedCities = Array.from(doc.getElementById('cityList').children).map(o => o.value);
-  if (!mergedCities.includes('Ростов-на-Дону')) throw new Error('merge should keep the fixed suggestions too, got: ' + mergedCities);
-  console.log('PASS: real city names from existing events are merged with the fixed suggestions ->', mergedCities);
+  // жанр renders as a group of multi-select chips (checkbox-like pills), not a text field
+  const genreChipLabels = Array.from(doc.getElementById('fFormatGroup').querySelectorAll('.chip')).map(c => c.textContent);
+  if (!genreChipLabels.includes('Стратегия') || !genreChipLabels.includes('Абстрактная') || !genreChipLabels.includes('Контроль территории')) {
+    throw new Error('expanded genre taxonomy missing (area control / abstract / strategy), got: ' + genreChipLabels);
+  }
+  console.log('PASS: genre renders as a multi-select chip group with an expanded taxonomy ->', genreChipLabels);
 
-  // fill the form
+  function selectGenres(...labels) {
+    Array.from(doc.getElementById('fFormatGroup').querySelectorAll('.chip'))
+      .filter(c => labels.includes(c.textContent))
+      .forEach(c => c.click());
+  }
+
+  function pickCity(value, otherText) {
+    const select = doc.getElementById('fCity');
+    select.value = value;
+    fireEvent(window, select, 'change');
+    if (value === 'Другой') doc.getElementById('fCityOther').value = otherText;
+  }
+
+  // fill the form -- "Казань" isn't in the fixed list, so exercises the "Другой" free-text path
   doc.getElementById('fDate').value = '2026-09-15';
   doc.getElementById('fTime').value = '19:30';
-  doc.getElementById('fCity').value = 'Казань';
-  doc.getElementById('fFormat').value = 'НРИ';
+  pickCity('Другой', 'Казань');
+  if (doc.getElementById('fCityOtherWrap').hidden) throw new Error('"Другой" should reveal the free-text city field');
+  selectGenres('НРИ', 'Приключение');
   doc.getElementById('fGame').value = 'Зов Ктулху';
   doc.getElementById('fPlace').value = 'Клуб настолок';
   doc.getElementById('fOrganizer').value = 'Игорь';
+  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
   doc.getElementById('fMax').value = '6';
   doc.getElementById('fNote').value = 'для новичков';
   doc.getElementById('fDifficulty').value = 'Сложная';
@@ -62,14 +82,17 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   doc.getElementById('fTesera').value = 'https://tesera.ru/game/cthulhu/';
   doc.getElementById('fBgg').value = 'https://boardgamegeek.com/boardgame/cthulhu';
 
-  const submitEvent = () => {
-    const ev = new window.Event('submit', { bubbles: true, cancelable: true });
-    doc.getElementById('eventForm').dispatchEvent(ev);
-  };
-  submitEvent();
+  const submitEvent = () => fireEvent(window, doc.getElementById('eventForm'), 'submit');
+  submitEvent(); // triggers "Опубликовать сейчас" (the form's default submit button)
 
   await waitFor(() => doc.getElementById('resultCard').hidden === false);
   console.log('PASS: submitted -> result card shown, form hidden =', doc.getElementById('eventForm').hidden);
+
+  if (doc.getElementById('scheduledNote').hidden !== true || doc.getElementById('publishedNote').hidden !== false) {
+    throw new Error('publish-now should show the published note, not the scheduled one');
+  }
+  if (doc.getElementById('postText').hidden !== false) throw new Error('publish-now should show the post text');
+  console.log('PASS: "Опубликовать сейчас" shows the published note and post text');
 
   const text = doc.getElementById('postText').value;
   const checks = [
@@ -117,6 +140,9 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   const createdCard = doc2.getElementById('ev-2026-09-15-19-30-зов-ктулху');
   const createdTags = Array.from(createdCard.querySelectorAll('.card-tags .tag')).map(t => t.textContent);
   if (!createdTags.includes('Сложная')) throw new Error('created event missing difficulty tag on index.html, got: ' + createdTags);
+  if (!createdTags.includes('НРИ') || !createdTags.includes('Приключение')) {
+    throw new Error('created event missing its multi-select genre tags on index.html, got: ' + createdTags);
+  }
   if (!createdCard.querySelector('.card-meta').textContent.includes('180 мин')) throw new Error('created event missing max duration line on index.html');
   if (!createdTags.includes('ужасы') || !createdTags.includes('детектив')) {
     throw new Error('created event missing setting keyword tags on index.html, got: ' + createdTags);
@@ -129,7 +155,11 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (!createdLinkHrefs.includes('https://tesera.ru/game/cthulhu/') || !createdLinkHrefs.includes('https://boardgamegeek.com/boardgame/cthulhu')) {
     throw new Error('created event missing tesera/bgg links on index.html, got: ' + createdLinkHrefs);
   }
-  console.log('PASS: new event created via organizer form renders difficulty/duration/links correctly on index.html');
+  const createdOrganizerEl = createdCard.querySelector('.card-meta .hoverable-email');
+  if (!createdOrganizerEl || createdOrganizerEl.title !== 'igor@beeline.ru') {
+    throw new Error('created event missing organizer hover-email on index.html, got: ' + (createdOrganizerEl && createdOrganizerEl.title));
+  }
+  console.log('PASS: new event created via organizer form renders genre/difficulty/duration/links/organizer-email correctly on index.html');
 
   // copy button
   doc.getElementById('copyBtn').click();
@@ -140,17 +170,58 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   // reset and resubmit identical event -> should be rejected as duplicate
   doc.getElementById('resetBtn').click();
   await waitFor(() => doc.getElementById('eventForm').hidden === false);
+  if (!doc.getElementById('fCityOtherWrap').hidden) throw new Error('reset should hide the "Другой" city field again');
+  if (doc.getElementById('fFormatGroup').querySelectorAll('.chip.active').length !== 0) throw new Error('reset should clear selected genre chips');
   doc.getElementById('fDate').value = '2026-09-15';
   doc.getElementById('fTime').value = '19:30';
-  doc.getElementById('fCity').value = 'Казань';
+  pickCity('Другой', 'Казань');
   doc.getElementById('fGame').value = 'Зов Ктулху';
   doc.getElementById('fOrganizer').value = 'Игорь';
+  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
   submitEvent();
 
   await waitFor(() => doc.getElementById('formError').hidden === false);
   const errText = doc.getElementById('formError').textContent;
   if (!errText.includes('уже есть')) throw new Error('expected duplicate error message, got: ' + errText);
   console.log('PASS: duplicate submission rejected with message:', errText);
+
+  // ---- «Запланировать»: saved privately, no post-text/copy UI, not in the public list ----
+  doc.getElementById('resetBtn').click();
+  await waitFor(() => doc.getElementById('eventForm').hidden === false);
+  doc.getElementById('fDate').value = '2026-10-20';
+  doc.getElementById('fTime').value = '18:00';
+  pickCity('Москва');
+  selectGenres('Кооперативная');
+  doc.getElementById('fGame').value = 'Секретная игра организатора';
+  doc.getElementById('fOrganizer').value = 'Игорь';
+  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
+
+  doc.getElementById('submitScheduleBtn').click();
+  await waitFor(() => doc.getElementById('resultCard').hidden === false);
+  if (doc.getElementById('scheduledNote').hidden !== false || doc.getElementById('publishedNote').hidden !== true) {
+    throw new Error('"Запланировать" should show the scheduled note, not the published one');
+  }
+  if (doc.getElementById('postText').hidden !== true || doc.getElementById('resultActionsRow').hidden !== true) {
+    throw new Error('"Запланировать" should hide the post-text/copy UI -- nothing to share yet');
+  }
+  const scheduledNoteText = doc.getElementById('scheduledNote').textContent;
+  if (!scheduledNoteText.includes('Секретная игра организатора') || !scheduledNoteText.includes('igor@beeline.ru')) {
+    throw new Error('scheduled note should mention the game and the organizer email, got: ' + scheduledNoteText);
+  }
+  console.log('PASS: "Запланировать" saves privately and shows the scheduled note instead of post text ->', scheduledNoteText);
+
+  const rawEvents = await fetch(API + '?action=events').then(r => r.json());
+  if (rawEvents.events.some(e => e.game === 'Секретная игра организатора')) {
+    throw new Error('a scheduled event must not appear in the public events list');
+  }
+  console.log('PASS: scheduled event is absent from the public action=events list');
+
+  const rawEventsAsCreator = await fetch(API + '?action=events&email=igor@beeline.ru').then(r => r.json());
+  const scheduledEv = rawEventsAsCreator.events.find(e => e.game === 'Секретная игра организатора');
+  if (!scheduledEv || scheduledEv.status !== 'Запланировано') {
+    throw new Error('scheduled event should be visible to its creator via email, with status Запланировано');
+  }
+  console.log('PASS: scheduled event is visible to its creator via ?email=');
 
   console.log('\nALL ORGANIZER TESTS PASSED');
   process.exit(0);

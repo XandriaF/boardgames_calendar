@@ -29,6 +29,19 @@
     return WEEKDAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
   }
 
+  // defensive, client-side mirror of Code.gs's capitalizeFirst() -- the backend already
+  // capitalizes on write, but this also covers rows edited by hand straight in the sheet
+  function capitalizeFirst(s) {
+    s = String(s || '').trim();
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // «Жанр» can hold several comma-separated values (same pattern as «Сеттинг»)
+  function splitList(s) {
+    return String(s || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
   // same algorithm as organizer.js -- used to build a stable, linkable #anchor per event
   function slugifyEventId(date, time, game) {
     var raw = (date + '-' + (time || '') + '-' + game).toLowerCase();
@@ -52,6 +65,24 @@
   }
   function setMe(me) {
     localStorage.setItem('nastolki_me', JSON.stringify(me));
+  }
+
+  // ---------- "я — амбассадор" secret ----------
+  // no real auth on this site (trust-based, same as everything else) -- whatever is saved
+  // here just gets sent along with every events request; the server decides whether it
+  // matches and quietly includes (or doesn't) everyone's scheduled/unpublished events
+  function getAmbassadorSecret() {
+    return localStorage.getItem('nastolki_ambassador_secret') || '';
+  }
+  function setAmbassadorSecret(secret) {
+    if (secret) localStorage.setItem('nastolki_ambassador_secret', secret);
+    else localStorage.removeItem('nastolki_ambassador_secret');
+  }
+  function renderAmbassadorBtn() {
+    var btn = document.getElementById('ambassadorBtn');
+    var active = !!getAmbassadorSecret();
+    btn.textContent = active ? 'амбассадор ✓' : 'я — амбассадор';
+    btn.classList.toggle('active', active);
   }
 
   // the "это вы" button never reflected a saved identity -- it always said
@@ -105,7 +136,15 @@
 
   function renderFilters() {
     var cities = uniqueSorted(state.events.map(function (e) { return e.city; }));
-    var formats = uniqueSorted(state.events.map(function (e) { return e.format; }));
+    // «Жанр» can hold several comma-separated values per event -- collect the union of
+    // individual genres across all events, not the raw (possibly multi-value) strings
+    var formatsSet = [];
+    state.events.forEach(function (e) {
+      splitList(e.format).forEach(function (f) {
+        if (formatsSet.indexOf(f) === -1) formatsSet.push(f);
+      });
+    });
+    var formats = uniqueSorted(formatsSet);
     renderChips('cityChips', cities, state.activeCity, function (val) {
       state.activeCity = val;
       renderFilters();
@@ -149,14 +188,14 @@
     var nearestSub = nearest ? nearest.game : 'пока ничего не запланировано';
 
     el.innerHTML = '';
-    el.appendChild(statCard('мероприятий', String(total), 'в открытом доступе'));
+    el.appendChild(statCard('мероприятий', String(total), 'сейчас доступны'));
     el.appendChild(statCard('городов', String(cities), 'участвует в программе'));
     el.appendChild(statCard('ближайшее', nearestLabel, nearestSub));
   }
 
   function passesFilter(ev) {
     var cityOk = state.activeCity === 'Все' || ev.city === state.activeCity;
-    var formatOk = state.activeFormat === 'Все' || ev.format === state.activeFormat;
+    var formatOk = state.activeFormat === 'Все' || splitList(ev.format).indexOf(state.activeFormat) !== -1;
     var pastOk = state.showPast || !isPastEvent(ev);
     return cityOk && formatOk && pastOk;
   }
@@ -208,7 +247,10 @@
     dateEl.textContent = fmtDate(ev.date) + (ev.time ? ' · ' + ev.time : '');
     var badge = document.createElement('span');
     var badgeClass, badgeText;
-    if (ev.status === 'Отменено') {
+    if (ev.status === 'Запланировано') {
+      badgeClass = 'badge-planned';
+      badgeText = 'Запланировано';
+    } else if (ev.status === 'Отменено') {
       badgeClass = 'badge-cancelled';
       badgeText = STATUS_LABEL[ev.status] || ev.status;
     } else if (past) {
@@ -236,15 +278,17 @@
 
     var game = document.createElement('div');
     game.className = 'card-game';
-    game.textContent = ev.game;
+    game.textContent = capitalizeFirst(ev.game);
 
     var tags = document.createElement('div');
     tags.className = 'card-tags';
-    var tagValues = [ev.city, ev.format, ev.difficulty].filter(Boolean);
+    var tagValues = [capitalizeFirst(ev.city)];
+    splitList(ev.format).forEach(function (t) { tagValues.push(t); });
+    if (ev.difficulty) tagValues.push(ev.difficulty);
     if (ev.setting) {
-      ev.setting.split(',').map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) { tagValues.push(s); });
+      splitList(ev.setting).forEach(function (s) { tagValues.push(s); });
     }
-    tagValues.forEach(function (t) {
+    tagValues.filter(Boolean).forEach(function (t) {
       var tag = document.createElement('span');
       tag.className = 'tag';
       tag.textContent = t;
@@ -254,7 +298,7 @@
     var meta = document.createElement('div');
     meta.className = 'card-meta';
     if (ev.place) meta.appendChild(metaLine('Где', ev.place));
-    if (ev.organizer) meta.appendChild(metaLine('Организатор', ev.organizer));
+    if (ev.organizer) meta.appendChild(metaLine('Организатор', capitalizeFirst(ev.organizer), ev.organizerEmail));
     if (ev.maxDuration) meta.appendChild(metaLine('Время партии', '~' + ev.maxDuration + ' мин (при полном столе)'));
 
     var links = null;
@@ -262,14 +306,29 @@
       links = document.createElement('div');
       links.className = 'card-links';
       if (ev.teseraUrl) links.appendChild(externalLink('Тесера', ev.teseraUrl));
-      if (ev.bggUrl) links.appendChild(externalLink('BGG', ev.bggUrl));
+      if (ev.bggUrl) links.appendChild(externalLink('Об игре подробнее (bgg)', ev.bggUrl));
     }
 
     var participants = document.createElement('div');
     participants.className = 'card-participants';
     var countText = ev.maxParticipants ? (ev.participantsCount + ' из ' + ev.maxParticipants) : (ev.participantsCount + ' записалось');
-    var namesText = ev.participantNames && ev.participantNames.length ? ' — ' + ev.participantNames.join(', ') : '';
-    participants.innerHTML = '<b>' + countText + '</b><span class="names">' + escapeHtml(namesText) + '</span>';
+    participants.innerHTML = '<b>' + countText + '</b>';
+    if (ev.participants && ev.participants.length) {
+      var namesWrap = document.createElement('span');
+      namesWrap.className = 'names';
+      namesWrap.appendChild(document.createTextNode(' — '));
+      ev.participants.forEach(function (p, i) {
+        if (i > 0) namesWrap.appendChild(document.createTextNode(', '));
+        var pName = document.createElement('span');
+        if (p.email) {
+          pName.className = 'hoverable-email';
+          pName.title = p.email;
+        }
+        pName.textContent = capitalizeFirst(p.name) + (p.guests ? ' +' + p.guests : '');
+        namesWrap.appendChild(pName);
+      });
+      participants.appendChild(namesWrap);
+    }
 
     var interestLine = null;
     if (ev.interestCount) {
@@ -283,9 +342,9 @@
     actions.className = 'card-actions';
     actions.appendChild(renderActionButton(ev));
     // "проявить интерес" -- for people this exact date/time/place doesn't suit, but who'd
-    // like to play the game some other time; not shown once already signed up or for
-    // past/cancelled events, since it wouldn't mean anything there
-    if (!past && ev.status !== 'Отменено' && !isRegistered) {
+    // like to play the game some other time; not shown once already signed up, for
+    // past/cancelled events, or for not-yet-published (Запланировано) ones
+    if (!past && ev.status !== 'Отменено' && ev.status !== 'Запланировано' && !isRegistered) {
       actions.appendChild(renderInterestButton(ev));
     }
 
@@ -316,9 +375,16 @@
     return btn;
   }
 
-  function metaLine(label, value) {
+  function metaLine(label, value, hoverEmail) {
     var div = document.createElement('div');
-    div.innerHTML = escapeHtml(label + ': ') + '<b>' + escapeHtml(value) + '</b>';
+    div.appendChild(document.createTextNode(label + ': '));
+    var b = document.createElement('b');
+    if (hoverEmail) {
+      b.className = 'hoverable-email';
+      b.title = hoverEmail;
+    }
+    b.textContent = value;
+    div.appendChild(b);
     return div;
   }
 
@@ -332,14 +398,19 @@
     return a;
   }
 
-  function escapeHtml(s) {
-    var div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-  }
-
   function renderActionButton(ev) {
     var isRegistered = state.registeredIds.indexOf(ev.id) !== -1;
+
+    // if the server included a "Запланировано" event in our list at all, it's because we're
+    // either its creator (by email) or logged in as an ambassador -- in both cases we're
+    // allowed to publish it, so there's no extra permission check needed on the client
+    if (ev.status === 'Запланировано') {
+      var publishBtn = document.createElement('button');
+      publishBtn.className = 'btn-primary';
+      publishBtn.textContent = 'Опубликовать';
+      publishBtn.addEventListener('click', function () { doPublish(ev); });
+      return publishBtn;
+    }
 
     if (ev.status === 'Отменено') {
       var btn = document.createElement('button');
@@ -382,7 +453,10 @@
     // registeredIds is bundled into the same response as events (when an email is known)
     // instead of a second round trip to action=myStatus -- halves the network wait on load
     var me = getMe();
-    var params = (me && me.email) ? { email: me.email } : {};
+    var params = {};
+    if (me && me.email) params.email = me.email;
+    var secret = getAmbassadorSecret();
+    if (secret) params.secret = secret;
     return apiGet('events', params).then(function (res) {
       if (!res.ok) throw new Error(res.error || 'load failed');
       state.events = res.events;
@@ -396,6 +470,7 @@
       renderFilters();
       renderGrid();
       renderWhoAmI();
+      renderAmbassadorBtn();
       highlightFromHash();
     });
   }
@@ -426,6 +501,7 @@
       hideOverlay('whoAmIOverlay');
       hideOverlay('signupOverlay');
       hideOverlay('interestOverlay');
+      hideOverlay('ambassadorOverlay');
     });
   });
   document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
@@ -529,6 +605,20 @@
       });
   }
 
+  // публикация запланированного мероприятия -- сервер сам проверяет право (создатель по
+  // email или амбассадор по секрету), клиент просто отправляет то, что у него уже сохранено
+  function doPublish(ev) {
+    var me = getMe();
+    apiPost({ action: 'publish', date: ev.date, time: ev.time, game: ev.game, email: (me && me.email) || '', secret: getAmbassadorSecret() })
+      .then(function (res) {
+        if (!res.ok) {
+          alert('Не получилось опубликовать, попробуйте ещё раз');
+          return;
+        }
+        refresh();
+      });
+  }
+
   function openInterestModal(ev) {
     state.pendingInterestEvent = ev;
     var me = getMe();
@@ -581,6 +671,27 @@
     renderGrid();
   });
 
+  document.getElementById('ambassadorBtn').addEventListener('click', function () {
+    document.getElementById('ambassadorSecretInput').value = getAmbassadorSecret();
+    showOverlay('ambassadorOverlay');
+  });
+
+  document.getElementById('saveAmbassadorSecret').addEventListener('click', function () {
+    var secret = document.getElementById('ambassadorSecretInput').value.trim();
+    setAmbassadorSecret(secret);
+    hideOverlay('ambassadorOverlay');
+    renderAmbassadorBtn();
+    refresh();
+  });
+
+  document.getElementById('clearAmbassadorSecret').addEventListener('click', function () {
+    setAmbassadorSecret('');
+    document.getElementById('ambassadorSecretInput').value = '';
+    hideOverlay('ambassadorOverlay');
+    renderAmbassadorBtn();
+    refresh();
+  });
+
   // ---------- init ----------
   function showStatus(msg) {
     var el = document.getElementById('status');
@@ -590,6 +701,7 @@
 
   renderWhoAmI(); // show any saved identity immediately, even before the network call resolves
   renderPastToggle();
+  renderAmbassadorBtn();
 
   if (!API_URL || API_URL.indexOf('ВСТАВЬТЕ') !== -1) {
     document.getElementById('loadingState').textContent = 'Сайт ещё не подключён к таблице. Заполните APPS_SCRIPT_URL в config.js — см. SETUP.md.';

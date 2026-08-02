@@ -41,29 +41,63 @@
     el.innerHTML = values.map(function (v) { return '<option value="' + v.replace(/"/g, '&quot;') + '">'; }).join('');
   }
 
-  // a fixed, curated list instead of deriving жанр suggestions from the sheet's raw
-  // historical values -- legacy rows have generic entries like "Настольная игра" that
-  // aren't useful as a genre tag (it's just a synonym for "board game" itself)
-  var GENRE_SUGGESTIONS = ['Евро', 'Америтреш', 'Пати', 'Кооперативная', 'Карточная', 'НРИ'];
+  // a broader, curated genre taxonomy -- covers the big board-game families (including
+  // area control / abstracts / strategy, which the earlier short list was missing), stored
+  // as a comma-separated list in the same «Жанр» column (same pattern as «Сеттинг»)
+  var GENRE_OPTIONS = [
+    'Стратегия', 'Евро', 'Америтреш', 'Абстрактная', 'Контроль территории',
+    'Кооперативная', 'Пати', 'Карточная', 'Детектив/дедукция', 'НРИ',
+    'Приключение', 'Экономика', 'Семейная', 'Варгейм'
+  ];
   var SETTING_SUGGESTIONS = ['фэнтези', 'космос', 'детектив', 'ужасы', 'постапокалипсис', 'история'];
-  // fixed list of official cities, always offered -- merged (not replaced) with whatever
-  // real city names already appear in existing events, since those are legitimate values too
-  var CITY_SUGGESTIONS = ['Онлайн (Board Game Arena)', 'Москва', 'Астрахань', 'Рязань', 'Воронеж',
-    'Пятигорск', 'Челябинск', 'Екатеринбург', 'Ростов-на-Дону', 'Оренбург'];
+  // fixed dropdown of official locations -- "Другой" reveals a free-text field for anything else
+  var CITY_OPTIONS = ['Онлайн', 'Москва', 'Астрахань', 'Рязань', 'Воронеж',
+    'Пятигорск', 'Челябинск', 'Екатеринбург', 'Ростов-на-Дону', 'Оренбург', 'Другой'];
+
+  var selectedGenres = [];
+
+  function renderGenreChips() {
+    var el = document.getElementById('fFormatGroup');
+    el.innerHTML = '';
+    GENRE_OPTIONS.forEach(function (g) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (selectedGenres.indexOf(g) !== -1 ? ' active' : '');
+      chip.textContent = g;
+      chip.addEventListener('click', function () {
+        var i = selectedGenres.indexOf(g);
+        if (i === -1) selectedGenres.push(g); else selectedGenres.splice(i, 1);
+        renderGenreChips();
+      });
+      el.appendChild(chip);
+    });
+  }
+
+  function fillCitySelect() {
+    var el = document.getElementById('fCity');
+    el.innerHTML = '<option value="">выберите город</option>' +
+      CITY_OPTIONS.map(function (c) { return '<option value="' + c.replace(/"/g, '&quot;') + '">' + c + '</option>'; }).join('');
+  }
+
+  document.getElementById('fCity').addEventListener('change', function () {
+    var isOther = this.value === 'Другой';
+    document.getElementById('fCityOtherWrap').hidden = !isOther;
+    if (!isOther) document.getElementById('fCityOther').value = '';
+  });
 
   function loadSuggestions() {
-    fillDatalist('formatList', GENRE_SUGGESTIONS);
+    fillCitySelect();
+    renderGenreChips();
     fillDatalist('settingList', SETTING_SUGGESTIONS);
-    fillDatalist('cityList', CITY_SUGGESTIONS);
-    apiGet('events').then(function (res) {
-      if (!res.ok) return;
-      var cities = Array.from(new Set(CITY_SUGGESTIONS.concat(res.events.map(function (e) { return e.city; }).filter(Boolean))));
-      fillDatalist('cityList', cities);
-    }).catch(function () { /* suggestions are a nice-to-have, ignore failures */ });
   }
 
   function getMe() {
     try { return JSON.parse(localStorage.getItem('nastolki_me') || 'null'); } catch (e) { return null; }
+  }
+  // keeps the "это вы" identity on index.html in sync with who just announced a game --
+  // needed so a scheduled (unpublished) event is recognized as "mine" there automatically
+  function setMe(me) {
+    localStorage.setItem('nastolki_me', JSON.stringify(me));
   }
 
   function buildPostText(ev, link) {
@@ -102,18 +136,18 @@
 
   var form = document.getElementById('eventForm');
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    hideFormError();
-
-    var ev = {
+  function collectFormValues() {
+    var cityRaw = document.getElementById('fCity').value;
+    var city = cityRaw === 'Другой' ? document.getElementById('fCityOther').value.trim() : cityRaw;
+    return {
       date: document.getElementById('fDate').value,
       time: document.getElementById('fTime').value,
-      city: document.getElementById('fCity').value.trim(),
-      format: document.getElementById('fFormat').value.trim(),
+      city: city,
+      format: selectedGenres.join(', '),
       game: document.getElementById('fGame').value.trim(),
       place: document.getElementById('fPlace').value.trim(),
       organizer: document.getElementById('fOrganizer').value.trim() || (getMe() && getMe().name) || '',
+      organizerEmail: document.getElementById('fOrganizerEmail').value.trim() || (getMe() && getMe().email) || '',
       maxParticipants: document.getElementById('fMax').value ? Number(document.getElementById('fMax').value) : null,
       difficulty: document.getElementById('fDifficulty').value,
       maxDuration: document.getElementById('fMaxDuration').value ? Number(document.getElementById('fMaxDuration').value) : null,
@@ -123,25 +157,36 @@
       bggUrl: document.getElementById('fBgg').value.trim(),
       note: document.getElementById('fNote').value.trim()
     };
+  }
 
-    if (!ev.date || !ev.city || !ev.game || !ev.organizer) {
-      showFormError('Заполните дату, город, игру и организатора');
+  function doSubmit(publishNow) {
+    hideFormError();
+    var ev = collectFormValues();
+
+    if (!ev.date || !ev.city || !ev.game || !ev.organizer || !ev.organizerEmail.includes('@')) {
+      showFormError('Заполните дату, город, игру, организатора и его корпоративную почту');
       return;
     }
 
-    var btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.textContent = 'Добавляем…';
+    var nowBtn = document.getElementById('submitNowBtn');
+    var scheduleBtn = document.getElementById('submitScheduleBtn');
+    nowBtn.disabled = true;
+    scheduleBtn.disabled = true;
+    var busyBtn = publishNow ? nowBtn : scheduleBtn;
+    var busyBtnOriginalText = busyBtn.textContent;
+    busyBtn.textContent = 'Добавляем…';
 
     apiPost({
-      action: 'createEvent',
+      action: 'createEvent', publishNow: publishNow,
       date: ev.date, time: ev.time, city: ev.city, format: ev.format, game: ev.game,
-      place: ev.place, organizer: ev.organizer, maxParticipants: ev.maxParticipants, note: ev.note,
+      place: ev.place, organizer: ev.organizer, organizerEmail: ev.organizerEmail,
+      maxParticipants: ev.maxParticipants, note: ev.note,
       difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
       imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
     }).then(function (res) {
-      btn.disabled = false;
-      btn.textContent = 'Добавить и получить текст поста';
+      nowBtn.disabled = false;
+      scheduleBtn.disabled = false;
+      busyBtn.textContent = busyBtnOriginalText;
 
       if (!res.ok) {
         if (res.error === 'duplicate') {
@@ -152,21 +197,45 @@
         return;
       }
 
-      var anchor = slugifyEventId(ev.date, ev.time, ev.game);
-      var link = new URL('index.html#' + anchor, window.location.href).href;
-      var text = buildPostText(ev, link);
+      setMe({ name: ev.organizer, email: ev.organizerEmail });
 
-      document.getElementById('postText').value = text;
       document.getElementById('resultCard').hidden = false;
       document.getElementById('copyHint').textContent = '';
       form.hidden = true;
-      showStatus('Мероприятие «' + ev.game + '» добавлено ✅');
+
+      if (publishNow) {
+        var anchor = slugifyEventId(ev.date, ev.time, ev.game);
+        var link = new URL('index.html#' + anchor, window.location.href).href;
+        document.getElementById('postText').value = buildPostText(ev, link);
+        document.getElementById('scheduledNote').hidden = true;
+        document.getElementById('publishedNote').hidden = false;
+        document.getElementById('postText').hidden = false;
+        document.getElementById('resultActionsRow').hidden = false;
+        showStatus('Мероприятие «' + ev.game + '» добавлено ✅');
+      } else {
+        document.getElementById('scheduledNote').textContent = 'Мероприятие «' + ev.game + '» сохранено как запланированное — пока его видите только вы (по почте ' + ev.organizerEmail + ') и амбассадоры. Найдите его на главной странице и нажмите «Опубликовать», когда будете готовы.';
+        document.getElementById('scheduledNote').hidden = false;
+        document.getElementById('publishedNote').hidden = true;
+        document.getElementById('postText').hidden = true;
+        document.getElementById('resultActionsRow').hidden = true;
+        showStatus('Мероприятие «' + ev.game + '» запланировано 🕓');
+      }
       document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }).catch(function () {
-      btn.disabled = false;
-      btn.textContent = 'Добавить и получить текст поста';
+      nowBtn.disabled = false;
+      scheduleBtn.disabled = false;
+      busyBtn.textContent = busyBtnOriginalText;
       showFormError('Ошибка сети, попробуйте ещё раз');
     });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    doSubmit(true);
+  });
+
+  document.getElementById('submitScheduleBtn').addEventListener('click', function () {
+    doSubmit(false);
   });
 
   document.getElementById('copyBtn').addEventListener('click', function () {
@@ -190,17 +259,23 @@
     form.hidden = false;
     document.getElementById('resultCard').hidden = true;
     document.getElementById('formStatus').hidden = true;
-    document.getElementById('fOrganizer').value = (getMe() && getMe().name) || '';
+    document.getElementById('fCityOtherWrap').hidden = true;
+    selectedGenres = [];
+    var me = getMe();
+    document.getElementById('fOrganizer').value = (me && me.name) || '';
+    document.getElementById('fOrganizerEmail').value = (me && me.email) || '';
     loadSuggestions();
   });
 
   // ---------- init ----------
   if (!API_URL || API_URL.indexOf('ВСТАВЬТЕ') !== -1) {
     showFormError('Сайт ещё не подключён к таблице. Заполните APPS_SCRIPT_URL в config.js — см. SETUP.md.');
-    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitNowBtn').disabled = true;
+    document.getElementById('submitScheduleBtn').disabled = true;
   } else {
     var me = getMe();
     if (me && me.name) document.getElementById('fOrganizer').value = me.name;
+    if (me && me.email) document.getElementById('fOrganizerEmail').value = me.email;
     loadSuggestions();
   }
 })();

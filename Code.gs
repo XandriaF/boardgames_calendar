@@ -18,13 +18,22 @@ var TIMEZONE = 'Europe/Moscow';
 // Статусы, которые вообще показываются на публичном сайте
 var PUBLIC_STATUSES = ['Набор открыт', 'Набрано', 'Отменено'];
 
+// «Запланировано» -- организатор сохранил игру, но не опубликовал: по умолчанию видна
+// только ему самому (по email) или тем, кто ввёл секретное слово амбассадора ниже
+var SCHEDULED_STATUS = 'Запланировано';
+
+// секретное слово для входа «я-амбассадор» -- открывает видимость ВСЕХ запланированных
+// (ещё не опубликованных) мероприятий, не только своих собственных
+var AMBASSADOR_SECRET = 'я-амбассадор';
+
 // Тот же цветовой код, что был в исходном ручном календаре организаторов
 var STATUS_COLORS = {
   'Набор открыт': '#FFFF00',
   'Набрано': '#00FF00',
   'Отменено': '#FF0000',
   'Непубличное': '#4A86E8',
-  'Черновик': '#00FFFF'
+  'Черновик': '#00FFFF',
+  'Запланировано': '#FFA500'
 };
 var CALENDAR_DAY_NAMES = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 var CALENDAR_WEEKS_AHEAD = 16; // сколько недель вперёд рисовать в «Календаре»
@@ -37,8 +46,9 @@ function doGet(e) {
       // email was passed) the caller's registered ids -- avoids a second round trip
       // and a second full sheet read that the client used to need via action=myStatus
       var signups = getAllSignupStates();
-      var result = { ok: true, events: getPublicEvents(signups) };
       var email = normalizeEmail((e.parameter && e.parameter.email) || '');
+      var hasAmbassadorAccess = isAmbassador((e.parameter && e.parameter.secret) || '');
+      var result = { ok: true, events: getPublicEvents(signups, email, hasAmbassadorAccess) };
       if (email) result.registeredIds = getMyRegistrations(email, signups);
       return jsonOutput(result);
     }
@@ -69,6 +79,9 @@ function doPost(e) {
     if (action === 'interest') {
       return jsonOutput(handleInterest(body));
     }
+    if (action === 'publish') {
+      return jsonOutput(handlePublish(body));
+    }
     if (action === 'createEvent') {
       return jsonOutput(handleCreateEvent(body));
     }
@@ -80,10 +93,15 @@ function doPost(e) {
 
 // ---------- events ----------
 
-function getPublicEvents(signups) {
+// viewerEmail/hasAmbassadorAccess control visibility of SCHEDULED_STATUS ("Запланировано")
+// events, which are hidden from the general public: a scheduled event is only included if
+// the caller is its creator (organizerEmail matches viewerEmail) or knows the ambassador
+// secret. Regular PUBLIC_STATUSES events are always included for everyone, as before.
+function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   var values = sheet.getDataRange().getValues();
-  signups = signups || getAllSignupStates(); // { eventKey: [{name,email,status}] }
+  signups = signups || getAllSignupStates(); // { eventKey: [{name,email,status,guests}] }
+  viewerEmail = normalizeEmail(viewerEmail || '');
   var events = [];
 
   for (var r = 1; r < values.length; r++) {
@@ -104,9 +122,14 @@ function getPublicEvents(signups) {
     var bggUrl = row[13];
     var setting = row[14];
     var imageUrl = row[15];
+    var organizerEmail = normalizeEmail(row[16] || '');
 
     if (!date || !game) continue;
-    if (PUBLIC_STATUSES.indexOf(status) === -1) continue;
+
+    var isPublic = PUBLIC_STATUSES.indexOf(status) !== -1;
+    var isScheduled = status === SCHEDULED_STATUS;
+    var isVisibleToViewer = isScheduled && ((viewerEmail && organizerEmail && viewerEmail === organizerEmail) || hasAmbassadorAccess);
+    if (!isPublic && !isVisibleToViewer) continue;
 
     var dateStr = formatDate(date);
     var key = eventKey(dateStr, time, game);
@@ -120,11 +143,12 @@ function getPublicEvents(signups) {
       id: key,
       date: dateStr,
       time: time || '',
-      city: city || '',
+      city: capitalizeFirst(city),
       format: format || '',
-      game: game || '',
+      game: capitalizeFirst(game),
       place: place || '',
-      organizer: organizer || '',
+      organizer: capitalizeFirst(organizer),
+      organizerEmail: organizerEmail || '',
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       status: status,
       note: note || '',
@@ -135,7 +159,9 @@ function getPublicEvents(signups) {
       setting: setting || '',
       imageUrl: imageUrl || '',
       participantsCount: participantsCount,
-      participantNames: active.map(function (p) { return p.name + (p.guests ? ' +' + p.guests : ''); }),
+      // structured, not pre-joined into a string, so the client can show each participant's
+      // corporate email as a hover tooltip next to their (capitalized) name
+      participants: active.map(function (p) { return { name: capitalizeFirst(p.name), email: p.email, guests: p.guests || 0 }; }),
       isOpen: isOpen,
       isFull: isFull,
       interestCount: interested.length
@@ -159,7 +185,7 @@ function headcountOf(active) {
 
 function handleSignup(body) {
   var date = body.date, time = body.time, game = body.game;
-  var name = (body.name || '').trim();
+  var name = capitalizeFirst(body.name || '');
   var email = normalizeEmail(body.email || '');
   var guests = Math.max(0, Math.min(10, Math.floor(Number(body.guests) || 0)));
 
@@ -209,7 +235,7 @@ function handleCancel(body) {
 // сигнал видит организатор (participantsCount/isFull это не затрагивает).
 function handleInterest(body) {
   var date = body.date, time = body.time, game = body.game;
-  var name = (body.name || '').trim();
+  var name = capitalizeFirst(body.name || '');
   var email = normalizeEmail(body.email || '');
   if (!date || !game || !name || !email) return { ok: false, error: 'missing fields' };
 
@@ -230,11 +256,12 @@ function handleInterest(body) {
 function handleCreateEvent(body) {
   var date = body.date;
   var time = (body.time || '').trim();
-  var city = (body.city || '').trim();
-  var format = (body.format || '').trim(); // «Жанр» в таблице/на сайте
-  var game = (body.game || '').trim();
+  var city = capitalizeFirst((body.city || '').trim());
+  var format = (body.format || '').trim(); // «Жанр» в таблице/на сайте -- CSV нескольких значений
+  var game = capitalizeFirst((body.game || '').trim());
   var place = (body.place || '').trim();
-  var organizer = (body.organizer || '').trim();
+  var organizer = capitalizeFirst((body.organizer || '').trim());
+  var organizerEmail = normalizeEmail(body.organizerEmail || '');
   var maxParticipants = body.maxParticipants;
   var note = (body.note || '').trim();
   var difficulty = (body.difficulty || '').trim();
@@ -243,8 +270,11 @@ function handleCreateEvent(body) {
   var imageUrl = (body.imageUrl || '').trim();
   var teseraUrl = (body.teseraUrl || '').trim();
   var bggUrl = (body.bggUrl || '').trim();
+  // publishNow defaults to true (backward compatible) -- explicit false means "Запланировать":
+  // save privately, visible only to this organizer (and ambassadors) until they publish it
+  var status = body.publishNow === false ? SCHEDULED_STATUS : 'Набор открыт';
 
-  if (!date || !game || !city || !organizer) {
+  if (!date || !game || !city || !organizer || !organizerEmail) {
     return { ok: false, error: 'missing fields' };
   }
 
@@ -268,20 +298,48 @@ function handleCreateEvent(body) {
     place,
     organizer,
     maxParticipants ? Number(maxParticipants) : '',
-    'Набор открыт',
+    status,
     note,
     difficulty,
     maxDuration ? Number(maxDuration) : '',
     teseraUrl,
     bggUrl,
     setting,
-    imageUrl
+    imageUrl,
+    organizerEmail
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
   sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
 
-  return { ok: true, id: eventKey(date, time, game) };
+  return { ok: true, id: eventKey(date, time, game), status: status };
+}
+
+// организатор (по email) или амбассадор (по секретному слову) переводит своё
+// запланированное мероприятие в «Набор открыт», делая его видимым всем
+function handlePublish(body) {
+  var date = body.date, time = body.time, game = body.game;
+  if (!date || !game) return { ok: false, error: 'missing fields' };
+
+  var email = normalizeEmail(body.email || '');
+  var hasAmbassadorAccess = isAmbassador(body.secret || '');
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    if (!row[0] || !row[4]) continue;
+    if (formatDate(row[0]) !== date || formatTimeVal(row[1]) !== String(time || '') || row[4] !== game) continue;
+
+    var organizerEmail = normalizeEmail(row[16] || '');
+    var isCreator = !!email && !!organizerEmail && email === organizerEmail;
+    if (!isCreator && !hasAmbassadorAccess) return { ok: false, error: 'forbidden' };
+    if (row[8] !== SCHEDULED_STATUS) return { ok: false, error: 'not scheduled' };
+
+    sheet.getRange(r + 1, 9).setValue('Набор открыт'); // столбец I = Статус
+    return { ok: true };
+  }
+  return { ok: false, error: 'event not found' };
 }
 
 // пытается достать обложку игры с BoardGameGeek по ссылке через официальный XML API2 --
@@ -402,6 +460,25 @@ function parseISODate(s) {
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+// приводит первую букву к заглавной, остальное не трогает -- имена/города/игры вида
+// "иван иванов" или "москва" на сайте должны выглядеть как "Иван иванов"/"Москва"
+function capitalizeFirst(s) {
+  s = String(s || '').trim();
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function normalizeSecret(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
+// секретное слово «я-амбассадор» открывает видимость всех запланированных мероприятий,
+// не только своих собственных -- сравнение без учёта регистра/пробелов по краям
+function isAmbassador(secret) {
+  var s = normalizeSecret(secret);
+  return !!s && s === normalizeSecret(AMBASSADOR_SECRET);
 }
 
 function jsonOutput(obj) {

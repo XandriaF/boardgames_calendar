@@ -8,16 +8,19 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 
 // ---- fixture data, matching the exact column order of the real sheets ----
 // Мероприятия: Дата, Время, Город, Жанр, Игра, Место, Организатор, Макс.участников, Статус, Комментарий,
-//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка
+//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Настольная игра', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg'],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', ''],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Настольная игра', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', ''],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Настольная игра', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', ''], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru'],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru'],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru'],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru'], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', ''],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru'],
+  // scheduled/unpublished -- only visible to its creator (olya@beeline.ru) or an ambassador,
+  // not in the general public list
+  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru'],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
@@ -190,7 +193,8 @@ const c1 = callDoPost({ action: 'cancel', date: '2026-08-07', time: '18:00', gam
 check('cancel ok, count back to 1', c1.ok === true && c1.participantsCount === 1);
 const r3 = callDoGet({ action: 'events' });
 const dracon3 = r3.events.find(e => e.game === 'Таверна Красный дракон');
-check('after cancel: isOpen=true again, count=1, only Игрок2 listed', dracon3.isOpen === true && dracon3.participantsCount === 1 && dracon3.participantNames[0] === 'Игрок2');
+check('after cancel: isOpen=true again, count=1, only Игрок2 listed', dracon3.isOpen === true && dracon3.participantsCount === 1 && dracon3.participants[0].name === 'Игрок2');
+check('event carries organizerEmail for the hover tooltip', dracon3.organizerEmail === 'dasha@beeline.ru');
 
 // the cancellation log row itself (client only sends email, not name) must still carry
 // the person's name in the «Записи» sheet, not leave it blank
@@ -262,15 +266,17 @@ const sBugGuest = callDoPost({ action: 'signup', date: '2026-09-20', time: '14:5
 check('signup with +2 guests succeeds, headcount reflects all 3 extra seats', sBugGuest.ok === true && sBugGuest.participantsCount === 4);
 const rBugGuest = callDoGet({ action: 'events' });
 const bugEv = rBugGuest.events.find(e => e.game === 'Тест Время-Баг');
-check('event with a guest signup shows correct headcount, isFull, and "Имя +N" in participant names',
+const bugParticipantLabels = bugEv.participants.map(p => p.name + (p.guests ? ' +' + p.guests : ''));
+check('event with a guest signup shows correct headcount, isFull, and "Имя +N" in participants',
   bugEv.participantsCount === 4 && bugEv.isFull === true &&
-  bugEv.participantNames.includes('ИгрокБаг') && bugEv.participantNames.includes('ИгрокБаг2 +2'));
+  bugParticipantLabels.includes('ИгрокБаг') && bugParticipantLabels.includes('ИгрокБаг2 +2'));
+check('participants carry email for the hover tooltip', bugEv.participants.find(p => p.name === 'ИгрокБаг').email === 'bug@beeline.ru');
 
 // ---- createEvent (organizer form) ----
 const before = eventsRows.length;
 const ce1 = callDoPost({
-  action: 'createEvent', date: '2026-09-10', time: '19:00', city: 'Новосибирск', format: 'Настольная игра',
-  game: 'Терраформирование Марса', place: 'Офис НСК', organizer: 'Оля', maxParticipants: 4, note: 'новичкам ок',
+  action: 'createEvent', date: '2026-09-10', time: '19:00', city: 'Новосибирск', format: 'Стратегия, Экономика',
+  game: 'Терраформирование Марса', place: 'Офис НСК', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: 4, note: 'новичкам ок',
   difficulty: 'Сложная', maxDuration: 150, teseraUrl: 'https://tesera.ru/game/mars/', bggUrl: 'https://boardgamegeek.com/boardgame/mars',
   setting: 'космос, экономика', imageUrl: 'https://example.com/mars.jpg'
 });
@@ -284,15 +290,14 @@ check('createEvent wrote difficulty/maxDuration/tesera/bgg into columns K-N',
   newRow[12] === 'https://tesera.ru/game/mars/' && newRow[13] === 'https://boardgamegeek.com/boardgame/mars');
 check('createEvent wrote setting into column O', newRow[14] === 'космос, экономика');
 check('createEvent wrote imageUrl into column P', newRow[15] === 'https://example.com/mars.jpg');
-check('createEvent date round-trips via formatDate to 2026-09-10',
-  sandbox.formatDate ? true : true); // sanity placeholder, checked below via doGet
+check('createEvent wrote organizerEmail into column Q', newRow[16] === 'olya@beeline.ru');
 
 // ---- BGG cover auto-fetch ----
 // no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
 // Code.gs should fetch and use that cover image
 const ceBgg = callDoPost({
   action: 'createEvent', date: '2026-09-13', time: '18:00', city: 'Москва', format: 'Евро',
-  game: 'Игра с BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  game: 'Игра с BGG', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, note: '',
   bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name'
 });
 check('createEvent with only a bggUrl still ok', ceBgg.ok === true);
@@ -303,7 +308,7 @@ check('createEvent auto-fetched the BGG cover image into column P',
 // a manually-provided imageUrl must win over the BGG auto-fetch, not get overwritten
 const ceBggManual = callDoPost({
   action: 'createEvent', date: '2026-09-14', time: '18:00', city: 'Москва', format: 'Евро',
-  game: 'Игра с картинкой и BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  game: 'Игра с картинкой и BGG', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, note: '',
   bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name', imageUrl: 'https://example.com/manual.jpg'
 });
 check('createEvent with both imageUrl and bggUrl keeps the manual image', ceBggManual.ok === true);
@@ -313,7 +318,7 @@ check('manual imageUrl is not overwritten by the BGG auto-fetch', rowBggManual[1
 // bggUrl pointing at a game the stubbed API does NOT know (404) -- must not crash, just no image
 const ceBggMiss = callDoPost({
   action: 'createEvent', date: '2026-09-15', time: '18:00', city: 'Москва', format: 'Евро',
-  game: 'Игра без обложки на BGG', place: '', organizer: 'Оля', maxParticipants: null, note: '',
+  game: 'Игра без обложки на BGG', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, note: '',
   bggUrl: 'https://boardgamegeek.com/boardgame/111111/unknown-game'
 });
 check('createEvent with a BGG lookup miss still succeeds (best-effort, no crash)', ceBggMiss.ok === true);
@@ -331,8 +336,8 @@ check('new event visible via doGet carries the new fields too',
 
 // createEvent without any of the new optional fields -> should not throw, should return empty/null
 const ce4 = callDoPost({
-  action: 'createEvent', date: '2026-09-12', time: '20:00', city: 'Казань', format: 'Настольная игра',
-  game: 'Каркассон', place: '', organizer: 'Витя', maxParticipants: null, note: ''
+  action: 'createEvent', date: '2026-09-12', time: '20:00', city: 'Казань', format: 'Семейная',
+  game: 'Каркассон', place: '', organizer: 'Витя', organizerEmail: 'vitya@beeline.ru', maxParticipants: null, note: ''
 });
 check('createEvent without optional fields still ok', ce4.ok === true);
 const r5 = callDoGet({ action: 'events' });
@@ -344,14 +349,91 @@ check('createEvent without optional fields yields empty/null, not undefined or c
 
 // duplicate rejected
 const ce2 = callDoPost({
-  action: 'createEvent', date: '2026-09-10', time: '19:00', city: 'Новосибирск', format: 'Настольная игра',
-  game: 'Терраформирование Марса', place: 'Офис НСК', organizer: 'Оля', maxParticipants: 4, note: ''
+  action: 'createEvent', date: '2026-09-10', time: '19:00', city: 'Новосибирск', format: 'Стратегия',
+  game: 'Терраформирование Марса', place: 'Офис НСК', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: 4, note: ''
 });
 check('duplicate createEvent rejected', ce2.ok === false && ce2.error === 'duplicate');
 
 // missing required fields rejected
 const ce3 = callDoPost({ action: 'createEvent', date: '2026-09-11', time: '19:00', game: 'Без города' });
 check('createEvent missing fields rejected', ce3.ok === false && ce3.error === 'missing fields');
+
+// createEvent without an organizerEmail is rejected too -- needed for the "who can publish
+// a scheduled event / see the hover tooltip" features to make sense
+const ceNoOrgEmail = callDoPost({
+  action: 'createEvent', date: '2026-09-16', time: '19:00', city: 'Москва', format: '',
+  game: 'Без почты организатора', place: '', organizer: 'Кто-то', maxParticipants: null, note: ''
+});
+check('createEvent without organizerEmail rejected', ceNoOrgEmail.ok === false && ceNoOrgEmail.error === 'missing fields');
+
+// ---- заглавные буквы: имена/города/игры нормализуются при записи ----
+const ceLower = callDoPost({
+  action: 'createEvent', date: '2026-09-17', time: '18:00', city: 'казань', format: '',
+  game: 'манчкин', place: '', organizer: 'витя нижний', organizerEmail: 'vitya2@beeline.ru', maxParticipants: null, note: ''
+});
+check('createEvent capitalizes city/game/organizer written in lowercase', ceLower.ok === true);
+const rLower = callDoGet({ action: 'events' });
+const lowerEv = rLower.events.find(e => e.game === 'Манчкин');
+check('city/game/organizer come back capitalized', lowerEv && lowerEv.city === 'Казань' && lowerEv.organizer === 'Витя нижний');
+
+const sLowerName = callDoPost({ action: 'signup', date: '2026-09-17', time: '18:00', game: 'Манчкин', name: 'игрок снизу', email: 'lower@beeline.ru' });
+check('signup capitalizes a lowercase name', sLowerName.ok === true);
+const rLowerName = callDoGet({ action: 'events' });
+const lowerNameEv = rLowerName.events.find(e => e.game === 'Манчкин');
+check('participant name comes back capitalized', lowerNameEv.participants[0].name === 'Игрок снизу');
+
+// «Жанр» holds several comma-separated values, same pattern as «Сеттинг»
+const draconAgain = rLower.events.find(e => e.game === 'Таверна Красный дракон');
+check('multi-value «Жанр» round-trips as a comma-separated string', draconAgain.format === 'Стратегия, Евро');
+
+// ---- «Запланировано»: видно только создателю (по email) или амбассадору ----
+const rNoAccess = callDoGet({ action: 'events' });
+check('scheduled event hidden with no email/secret', !rNoAccess.events.some(e => e.game === 'Секретный проект'));
+
+const rWrongEmail = callDoGet({ action: 'events', email: 'someone-else@beeline.ru' });
+check('scheduled event hidden from a different email', !rWrongEmail.events.some(e => e.game === 'Секретный проект'));
+
+const rCreatorEmail = callDoGet({ action: 'events', email: 'olya@beeline.ru' });
+const secretEvForCreator = rCreatorEmail.events.find(e => e.game === 'Секретный проект');
+check('scheduled event visible to its creator by email', secretEvForCreator && secretEvForCreator.status === 'Запланировано');
+
+const rAmbassador = callDoGet({ action: 'events', secret: 'Я-Амбассадор' }); // case-insensitive
+check('scheduled event visible with the ambassador secret (case-insensitive)',
+  rAmbassador.events.some(e => e.game === 'Секретный проект'));
+
+// публикация: не создатель и без секрета -- запрещено, событие остаётся запланированным
+const pForbidden = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', email: 'someone-else@beeline.ru' });
+check('publish forbidden for a non-creator without the ambassador secret', pForbidden.ok === false && pForbidden.error === 'forbidden');
+const rStillScheduled = callDoGet({ action: 'events', email: 'olya@beeline.ru' });
+check('event still Запланировано after a forbidden publish attempt',
+  rStillScheduled.events.find(e => e.game === 'Секретный проект').status === 'Запланировано');
+
+// публикация через секрет амбассадора -- разрешена, даже не будучи создателем
+const pAmbassador = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', secret: 'я-амбассадор' });
+check('ambassador can publish someone else\'s scheduled event', pAmbassador.ok === true);
+const rPublished = callDoGet({ action: 'events' });
+check('event is now publicly visible after being published', rPublished.events.some(e => e.game === 'Секретный проект' && e.status === 'Набор открыт'));
+
+// публикация уже опубликованного события -- отклоняется
+const pAlreadyPublished = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', secret: 'я-амбассадор' });
+check('publishing an already-published event is rejected', pAlreadyPublished.ok === false && pAlreadyPublished.error === 'not scheduled');
+
+// ---- «Запланировать» через createEvent (publishNow:false), затем публикация создателем ----
+const ceScheduled = callDoPost({
+  action: 'createEvent', date: '2026-10-05', time: '20:00', city: 'Москва', format: 'Пати',
+  game: 'Новая скрытая игра', place: '', organizer: 'Женя', organizerEmail: 'zhenya@beeline.ru',
+  maxParticipants: null, note: '', publishNow: false
+});
+check('createEvent with publishNow:false ok, returns status Запланировано', ceScheduled.ok === true && ceScheduled.status === 'Запланировано');
+const rHiddenScheduled = callDoGet({ action: 'events' });
+check('freshly scheduled event not in the public list', !rHiddenScheduled.events.some(e => e.game === 'Новая скрытая игра'));
+const rOwnScheduled = callDoGet({ action: 'events', email: 'zhenya@beeline.ru' });
+check('freshly scheduled event visible to its own creator', rOwnScheduled.events.some(e => e.game === 'Новая скрытая игра'));
+
+const pByCreator = callDoPost({ action: 'publish', date: '2026-10-05', time: '20:00', game: 'Новая скрытая игра', email: 'zhenya@beeline.ru' });
+check('creator can publish their own scheduled event (no secret needed)', pByCreator.ok === true);
+const rNowPublic = callDoGet({ action: 'events' });
+check('event is publicly visible after the creator publishes it', rNowPublic.events.some(e => e.game === 'Новая скрытая игра' && e.status === 'Набор открыт'));
 
 // ---- organizer deletes an event row directly in Google Sheets ----
 // (do this last -- it removes "Таверна Красный дракон" from the fixture, which earlier
@@ -366,8 +448,8 @@ const sAfterDelete = callDoPost({ action: 'signup', date: '2026-08-07', time: '1
 check('signup against a deleted event is rejected ("event not found"), not a crash', sAfterDelete.ok === false && sAfterDelete.error === 'event not found');
 
 const ceAfterDelete = callDoPost({
-  action: 'createEvent', date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Настольная игра',
-  game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', maxParticipants: 2, note: ''
+  action: 'createEvent', date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия',
+  game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, note: ''
 });
 check('re-announcing the same date/time/game after the old row was deleted is allowed (no false duplicate)', ceAfterDelete.ok === true);
 

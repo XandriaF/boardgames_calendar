@@ -227,6 +227,7 @@ input { text-transform: none; }
 .badge-full { background: var(--bg); color: var(--t2); }
 .badge-cancelled { background: #FFE8DC; color: var(--err); }
 .badge-past { background: var(--border); color: var(--t2); }
+.badge-planned { background: #FFF1DB; color: #B36B00; }
 
 .card-image {
   width: 100%;
@@ -252,8 +253,11 @@ input { text-transform: none; }
 .card-participants { font-size: 13px; color: var(--t1); }
 .card-participants b { font-weight: 600; }
 .card-participants .names { color: var(--t2); }
+.hoverable-email { border-bottom: 1px dotted var(--t3); cursor: help; }
 
 .card-interest { font-size: 12px; color: var(--t2); }
+
+.past-toggle-wrap { text-align: center; margin-top: 20px; }
 
 .card-links { display: flex; gap: 12px; flex-wrap: wrap; }
 .card-link { font-size: 12px; font-weight: 600; color: var(--t2); text-decoration: none; }

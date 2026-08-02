@@ -31,13 +31,12 @@
       <span class="filter-label">Жанр</span>
       <div class="pillrow" id="formatChips"></div>
     </div>
-    <div class="filter-block">
-      <span class="filter-label">Прошедшие</span>
-      <button class="btn-ghost" id="togglePastBtn" type="button">показать прошедшие</button>
-    </div>
     <div class="filter-block id-group">
       <span class="filter-label">Это вы</span>
-      <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+      <div class="pillrow">
+        <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+        <button class="btn-ghost" id="ambassadorBtn" type="button">я — амбассадор</button>
+      </div>
     </div>
   </div>
 
@@ -46,6 +45,8 @@
   <section class="cards-grid" id="eventsGrid" aria-live="polite">
     <div class="empty" id="loadingState">Загружаем анонсы…</div>
   </section>
+
+  <p class="past-toggle-wrap"><button class="btn-ghost" id="togglePastBtn" type="button">показать прошедшие</button></p>
 
   <p class="cap mut3 footer-note">Данные синхронизированы с внутренним календарём настолок · билайн</p>
   <p class="cap mut3 footer-note" style="margin-top:6px"><a href="organizer.html" style="color:inherit">для организаторов: анонсировать новую игру →</a></p>
@@ -109,6 +110,22 @@
     </label>
     <button class="btn-primary" id="confirmInterest" type="button">Отправить</button>
     <p class="modal-error" id="interestError" hidden></p>
+  </div>
+</div>
+
+<!-- Модалка «я — амбассадор» -- секретное слово открывает видимость ВСЕХ запланированных
+     (ещё не опубликованных) мероприятий, не только своих собственных -->
+<div class="modal-overlay" id="ambassadorOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" data-close>×</button>
+    <h3>Я — амбассадор</h3>
+    <p class="modal-hint">Введите секретное слово, чтобы видеть все запланированные (пока не опубликованные) мероприятия, а не только свои.</p>
+    <label class="field">
+      <span>Секретное слово</span>
+      <input type="text" id="ambassadorSecretInput" placeholder="секретное слово" autocomplete="off">
+    </label>
+    <button class="btn-primary" id="saveAmbassadorSecret" type="button">Сохранить</button>
+    <button class="btn-ghost" id="clearAmbassadorSecret" type="button" style="margin-top:10px">Выключить режим амбассадора</button>
   </div>
 </div>
 

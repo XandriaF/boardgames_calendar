@@ -38,8 +38,12 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   const cityChips = Array.from(doc.getElementById('cityChips').querySelectorAll('.chip')).map(c => c.textContent);
   const formatChips = Array.from(doc.getElementById('formatChips').querySelectorAll('.chip')).map(c => c.textContent);
   if (!cityChips.includes('Москва') || !cityChips.includes('Санкт-Петербург')) throw new Error('city chips missing: ' + cityChips);
-  if (!formatChips.includes('НРИ') || !formatChips.includes('Настольная игра')) throw new Error('format chips missing: ' + formatChips);
-  console.log('PASS: filter chips =', cityChips, formatChips);
+  // «Жанр» can hold several comma-separated values per event (e.g. Таверна = "Стратегия, Евро")
+  // -- the filter chips must be the union of individual genres, not the raw multi-value strings
+  if (!formatChips.includes('НРИ') || !formatChips.includes('Стратегия') || !formatChips.includes('Евро')) {
+    throw new Error('format chips missing: ' + formatChips);
+  }
+  console.log('PASS: filter chips (multi-genre split into individual chips) =', cityChips, formatChips);
 
   // 3. click city filter "Санкт-Петербург" -> should show only 1 card
   const spbChip = Array.from(doc.getElementById('cityChips').querySelectorAll('.chip')).find(c => c.textContent === 'Санкт-Петербург');
@@ -72,13 +76,22 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   const tagTexts = Array.from(openCardCheck.querySelectorAll('.card-tags .tag')).map(t => t.textContent);
   if (!tagTexts.includes('Средняя')) throw new Error('difficulty tag missing, got tags: ' + tagTexts);
   if (!openCardCheck.querySelector('.card-meta').textContent.includes('90 мин')) throw new Error('max duration line missing');
+  // multi-value «Жанр» ("Стратегия, Евро") must render as two separate tag chips
+  if (!tagTexts.includes('Стратегия') || !tagTexts.includes('Евро')) throw new Error('multi-genre tags missing, got: ' + tagTexts);
   const linkTexts = Array.from(openCardCheck.querySelectorAll('.card-link')).map(l => l.textContent);
   const linkHrefs = Array.from(openCardCheck.querySelectorAll('.card-link')).map(l => l.getAttribute('href'));
-  if (!linkTexts.some(t => t.startsWith('Тесера')) || !linkTexts.some(t => t.startsWith('BGG'))) {
+  if (!linkTexts.some(t => t.startsWith('Тесера')) || !linkTexts.some(t => t.startsWith('Об игре подробнее'))) {
     throw new Error('tesera/bgg links missing, got: ' + linkTexts);
   }
   if (!linkHrefs.includes('https://tesera.ru/game/tavern/')) throw new Error('tesera href wrong: ' + linkHrefs);
-  console.log('PASS: difficulty tag, max-duration line, and Тесера/BGG links render correctly');
+  console.log('PASS: difficulty tag, multi-genre tags, max-duration line, and Тесера/BGG (relabeled) links render correctly');
+
+  // organizer name shows their corporate email as a hover tooltip (native title attribute)
+  const organizerEl = openCardCheck.querySelector('.card-meta .hoverable-email');
+  if (!organizerEl || organizerEl.title !== 'dasha@beeline.ru') {
+    throw new Error('organizer hover-email missing or wrong: ' + (organizerEl && organizerEl.title));
+  }
+  console.log('PASS: organizer name carries corporate email as a hover tooltip ->', organizerEl.title);
 
   // setting keywords ("фэнтези, таверна") must split into separate tag chips
   if (!tagTexts.includes('фэнтези') || !tagTexts.includes('таверна')) {
@@ -149,12 +162,15 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (statCards.length !== 3) throw new Error('expected 3 stat cards, got ' + statCards.length);
   const statTexts = Array.from(statCards).map(c => c.querySelector('.n').textContent);
   if (statTexts[0] !== '4') throw new Error('expected total events stat = 4, got ' + statTexts[0]);
-  console.log('PASS: stats row rendered ->', statTexts);
+  const statSub = statCards[0].querySelector('.cap.mut').textContent;
+  if (statSub !== 'сейчас доступны') throw new Error('stat subtitle should read "сейчас доступны", got: ' + statSub);
+  console.log('PASS: stats row rendered ->', statTexts, '/', statSub);
 
-  // 10. past events are hidden by default, revealed only via the "показать прошедшие" toggle.
-  // The past-dated event (2026-07-20, before the sandbox's "today" 2026-07-31) is marked past
-  // even though its own status is "Набор открыт", is disabled, and floats to the bottom once shown.
+  // 10. "показать прошедшие" now lives below the cards grid, not in the sticky filter bar
   const togglePastBtn = doc.getElementById('togglePastBtn');
+  if (doc.getElementById('filters').contains(togglePastBtn)) {
+    throw new Error('togglePastBtn should have moved out of the filter bar, below the grid');
+  }
   if (togglePastBtn.textContent !== 'показать прошедшие') {
     throw new Error('togglePastBtn should start as "показать прошедшие", got: ' + togglePastBtn.textContent);
   }
@@ -298,6 +314,73 @@ async function waitFor(cond, timeout = 5000, step = 50) {
     throw new Error('expressing interest must not affect participantsCount, got: ' + cardAfterInterest.querySelector('.card-participants b').textContent);
   }
   console.log('PASS: expressing interest does not affect participantsCount');
+
+  // 14. «Запланировано» ("Тайный проект", owned by olya@beeline.ru): hidden from the general
+  // public by default, visible to its creator by email, hidden from a wrong/no ambassador
+  // secret, visible with the correct one (case-insensitive), and publishable from the card.
+  const dom4 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  dom4.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Оля', email: 'olya@beeline.ru' }));
+  dom4.window.fetch = fetch;
+  dom4.window.confirm = () => true;
+  dom4.window.alert = () => {};
+  dom4.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
+  dom4.window.eval(appJs);
+  const doc4 = dom4.window.document;
+  await waitFor(() => Array.from(doc4.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'));
+  const creatorCard = Array.from(doc4.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
+  const creatorBadge = creatorCard.querySelector('.badge');
+  if (!creatorBadge.classList.contains('badge-planned') || creatorBadge.textContent !== 'Запланировано') {
+    throw new Error('scheduled event badge wrong: ' + creatorBadge.className + ' / ' + creatorBadge.textContent);
+  }
+  console.log('PASS: creator sees their own scheduled (unpublished) event by email, with a "Запланировано" badge');
+
+  // not visible to a random logged-in visitor without the ambassador secret (current identity
+  // on `doc` is interested.player@beeline.ru from the interest test above)
+  if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект')) {
+    throw new Error('scheduled event should not be visible to a non-creator without the ambassador secret');
+  }
+  console.log('PASS: scheduled event hidden from a regular visitor');
+
+  // wrong secret: still hidden
+  doc.getElementById('ambassadorBtn').click();
+  await waitFor(() => !doc.getElementById('ambassadorOverlay').hidden);
+  doc.getElementById('ambassadorSecretInput').value = 'not-the-password';
+  doc.getElementById('saveAmbassadorSecret').click();
+  await waitFor(() => doc.getElementById('ambassadorOverlay').hidden === true, 5000);
+  await wait(300); // let the triggered refresh() settle
+  if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект')) {
+    throw new Error('a wrong ambassador secret must not reveal scheduled events');
+  }
+  console.log('PASS: a wrong ambassador secret does not reveal scheduled events');
+
+  // correct secret (mixed case, to exercise the case-insensitive compare end-to-end over HTTP)
+  doc.getElementById('ambassadorBtn').click();
+  await waitFor(() => !doc.getElementById('ambassadorOverlay').hidden);
+  doc.getElementById('ambassadorSecretInput').value = 'Я-Амбассадор';
+  doc.getElementById('saveAmbassadorSecret').click();
+  await waitFor(() => Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'), 5000);
+  const ambassadorCard = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
+  const publishBtn = Array.from(ambassadorCard.querySelectorAll('button')).find(b => b.textContent === 'Опубликовать');
+  if (!publishBtn) throw new Error('ambassador should see a "Опубликовать" button on a scheduled event');
+  console.log('PASS: correct ambassador secret reveals the scheduled event with a publish button, even though not its creator');
+
+  // publishing (as ambassador, not the creator) makes it public for everyone
+  publishBtn.click();
+  await waitFor(() => {
+    const card = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
+    return card && card.querySelector('.badge').textContent !== 'Запланировано';
+  }, 5000);
+  console.log('PASS: ambassador can publish a scheduled event they did not create');
+
+  const dom5 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  dom5.window.fetch = fetch;
+  dom5.window.confirm = () => true;
+  dom5.window.alert = () => {};
+  dom5.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
+  dom5.window.eval(appJs);
+  const doc5 = dom5.window.document;
+  await waitFor(() => Array.from(doc5.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'));
+  console.log('PASS: published event is now visible to a completely anonymous fresh visitor');
 
   console.log('\nALL TESTS PASSED');
   process.exit(0);

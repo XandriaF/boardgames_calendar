@@ -36,14 +36,18 @@
       </label>
       <label class="field">
         <span>Город *</span>
-        <input type="text" id="fCity" list="cityList" placeholder="Москва" required>
-        <datalist id="cityList"></datalist>
+        <select id="fCity" required>
+          <option value="">выберите город</option>
+        </select>
       </label>
-      <label class="field">
-        <span>Жанр</span>
-        <input type="text" id="fFormat" list="formatList" placeholder="Евро, пати, кооператив...">
-        <datalist id="formatList"></datalist>
+      <label class="field" id="fCityOtherWrap" hidden>
+        <span>Свой город *</span>
+        <input type="text" id="fCityOther" placeholder="Впишите город">
       </label>
+      <div class="field field-wide">
+        <span>Жанр (можно несколько)</span>
+        <div class="pillrow" id="fFormatGroup"></div>
+      </div>
       <label class="field field-wide">
         <span>Игра *</span>
         <input type="text" id="fGame" placeholder="Каркассон" required>
@@ -55,6 +59,11 @@
       <label class="field">
         <span>Организатор *</span>
         <input type="text" id="fOrganizer" placeholder="Даша Иванова" required>
+      </label>
+      <label class="field">
+        <span>Email организатора *</span>
+        <input type="email" id="fOrganizerEmail" placeholder="ivan.ivanov@beeline.ru" required>
+        <span class="field-hint">Нужен, чтобы вы могли позже опубликовать запланированную игру и чтобы участники видели, как с вами связаться</span>
       </label>
       <label class="field">
         <span>Макс. участников</span>
@@ -98,15 +107,19 @@
         <input type="text" id="fNote" placeholder="необязательно">
       </label>
     </div>
-    <button class="btn-primary" id="submitBtn" type="submit">Добавить и получить текст поста</button>
+    <div class="result-actions">
+      <button class="btn-primary" id="submitNowBtn" type="submit">Опубликовать сейчас</button>
+      <button class="btn-ghost" id="submitScheduleBtn" type="button">Запланировать (видно только вам)</button>
+    </div>
     <p class="modal-error" id="formError" hidden></p>
   </form>
 
   <section class="card result-card" id="resultCard" hidden>
     <h3>Готово 🎲</h3>
-    <p class="modal-hint">Мероприятие добавлено на сайт и в таблицу «Мероприятия». Текст ниже можно сразу вставить в чат.</p>
+    <p class="modal-hint" id="scheduledNote" hidden></p>
+    <p class="modal-hint" id="publishedNote">Мероприятие добавлено на сайт и в таблицу «Мероприятия». Текст ниже можно сразу вставить в чат.</p>
     <textarea id="postText" class="post-text" readonly rows="9"></textarea>
-    <div class="result-actions">
+    <div class="result-actions" id="resultActionsRow">
       <button class="btn-primary" id="copyBtn" type="button">Скопировать текст</button>
       <button class="btn-ghost" id="resetBtn" type="button">Анонсировать ещё одну</button>
     </div>
