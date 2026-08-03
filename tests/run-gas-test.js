@@ -8,22 +8,25 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 
 // ---- fixture data, matching the exact column order of the real sheets ----
 // Мероприятия: Дата, Время, Город, Жанр, Игра, Место, Организатор, Макс.участников, Статус, Комментарий,
-//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора, Закрытое
+//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора, Закрытое,
+//              Занято организатором
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое','Занято организатором'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false, 0],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false, 0],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0],
   // scheduled/unpublished -- only visible to its creator (olya@beeline.ru) or an ambassador,
   // not in the general public list
-  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false],
+  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false, 0],
   // closed/private: publicly-statused but hidden from the general grid -- visible only to
   // its organizer, ambassadors, or its (creation-time) participants
-  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true],
+  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true, 0],
+  // has 2 seats already manually reserved (organizer marked them via +/-, no name/email)
+  [new Date('2026-10-15T00:00:00'), '18:00', 'Москва', 'Пати', 'Мафия', '', 'Витя', 5, 'Набор открыт', '', '', '', '', '', '', '', 'vitya3@beeline.ru', false, 2],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
@@ -166,7 +169,12 @@ const r1 = callDoGet({ action: 'events' });
 check('doGet events ok', r1.ok === true);
 check('draft (Черновик) hidden from public list', !r1.events.some(e => e.game === 'Нечто'));
 check('closed event (Приватная встреча) hidden from anonymous public list', !r1.events.some(e => e.game === 'Приватная встреча'));
-check('4 public events returned', r1.events.length === 4);
+check('5 public events returned', r1.events.length === 5);
+
+const mafia = r1.events.find(e => e.game === 'Мафия');
+check('event with 2 manually-reserved seats (no name/email) reflects that in participantsCount',
+  mafia && mafia.reservedCount === 2 && mafia.participantsCount === 2 && mafia.participants.length === 0);
+check('reserved-only seats do not make the event full below its max', mafia && mafia.isFull === false && mafia.isOpen === true);
 
 const timeBug = r1.events.find(e => e.game === 'Тест Время-Баг');
 check('a Время cell corrupted into a Date object (Sheets auto-conversion) is reformatted back to "HH:mm"',
@@ -310,6 +318,7 @@ check('createEvent wrote setting into column O', newRow[14] === 'космос, �
 check('createEvent wrote imageUrl into column P', newRow[15] === 'https://example.com/mars.jpg');
 check('createEvent wrote organizerEmail into column Q', newRow[16] === 'olya@beeline.ru');
 check('createEvent defaults isClosed to false in column R', newRow[17] === false);
+check('createEvent defaults reservedCount to 0 in column S', newRow[18] === 0);
 
 // ---- BGG cover auto-fetch ----
 // no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
@@ -532,6 +541,49 @@ check('participant name capitalized from the closedParticipants list', newClosed
 const rNewClosedNoName = callDoGet({ action: 'events', email: 'noname.participant@beeline.ru' });
 const newClosedEvForNoNameParticipant = rNewClosedNoName.events.find(e => e.game === 'Клуб по интересам');
 check('a participant listed with only an email still gets registered, name derived from the email', !!newClosedEvForNoNameParticipant);
+
+// ---- adjustReserved: organizer marks seats as taken (+/-) without a name/email ----
+const arForbidden = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'someone-else@beeline.ru', delta: 1 });
+check('adjustReserved forbidden for a non-organizer, non-ambassador', arForbidden.ok === false && arForbidden.error === 'forbidden');
+
+const arPlus = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: 1 });
+check('organizer can increment the reserved-seats counter', arPlus.ok === true && arPlus.reservedCount === 3);
+const rAfterPlus = callDoGet({ action: 'events' });
+check('reserved count reflected in doGet after +1', rAfterPlus.events.find(e => e.game === 'Мафия').reservedCount === 3);
+
+const arMinus = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: -1 });
+check('organizer can decrement the reserved-seats counter', arMinus.ok === true && arMinus.reservedCount === 2);
+
+// Мафия has maxParticipants=5 and reservedCount=2 (no named signups) -- 3 more should exactly
+// fill it, a 4th should be rejected as full
+const arFill = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: 3 });
+check('incrementing by more than 1 at once works and fills exactly to capacity', arFill.ok === true && arFill.reservedCount === 5);
+const arOverfull = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: 1 });
+check('incrementing past maxParticipants is rejected', arOverfull.ok === false && arOverfull.error === 'full');
+const rMafiaFull = callDoGet({ action: 'events' });
+const mafiaFull = rMafiaFull.events.find(e => e.game === 'Мафия');
+check('event is now full purely from reserved seats, with no named participants', mafiaFull.isFull === true && mafiaFull.participants.length === 0);
+
+// decrementing floors at 0, never goes negative
+const arDrain = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: -10 });
+check('decrementing far past 0 floors at 0 instead of going negative', arDrain.ok === true && arDrain.reservedCount === 0);
+
+// an ambassador can adjust someone else's event too, same as publish
+const arAmbassador = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'ambassador@beeline.ru', delta: 1 });
+check('an ambassador can also adjust the reserved-seats counter on someone else\'s event', arAmbassador.ok === true && arAmbassador.reservedCount === 1);
+
+// reserved seats count alongside named signups toward the same capacity
+const sMafia = callDoPost({ action: 'signup', date: '2026-10-15', time: '18:00', game: 'Мафия', name: 'Реальный Игрок', email: 'realplayer@beeline.ru' });
+check('named signup succeeds alongside an existing reserved seat', sMafia.ok === true);
+const rMafiaMixed = callDoGet({ action: 'events' });
+const mafiaMixed = rMafiaMixed.events.find(e => e.game === 'Мафия');
+check('participantsCount combines named signups and manually-reserved seats', mafiaMixed.reservedCount === 1 && mafiaMixed.participantsCount === 2 && mafiaMixed.participants.length === 1);
+
+const arMissingFields = callDoPost({ action: 'adjustReserved', date: '2026-10-15', time: '18:00', game: 'Мафия', email: 'vitya3@beeline.ru', delta: 0 });
+check('adjustReserved with delta=0 rejected as a no-op/missing field', arMissingFields.ok === false);
+
+const arEventNotFound = callDoPost({ action: 'adjustReserved', date: '2099-01-01', time: '18:00', game: 'Не существует', email: 'vitya3@beeline.ru', delta: 1 });
+check('adjustReserved against a non-existent event rejected', arEventNotFound.ok === false && arEventNotFound.error === 'event not found');
 
 // ---- organizer deletes an event row directly in Google Sheets ----
 // (do this last -- it removes "Таверна Красный дракон" from the fixture, which earlier

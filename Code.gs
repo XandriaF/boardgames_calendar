@@ -90,6 +90,9 @@ function doPost(e) {
     if (action === 'identify') {
       return jsonOutput(handleIdentify(body));
     }
+    if (action === 'adjustReserved') {
+      return jsonOutput(handleAdjustReserved(body));
+    }
     return jsonOutput({ ok: false, error: 'unknown action' });
   } catch (err) {
     return jsonOutput({ ok: false, error: String(err) });
@@ -132,6 +135,7 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
     var imageUrl = row[15];
     var organizerEmail = normalizeEmail(row[16] || '');
     var isClosed = isClosedVal(row[17]);
+    var reservedCount = Number(row[18]) || 0; // места, занятые организатором вручную (+/-), без имени/почты
 
     if (!date || !game) continue;
 
@@ -156,7 +160,9 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
     }
     if (!visible) continue;
 
-    var participantsCount = headcountOf(active); // считает и гостей (+1/+2/...), не только строки записи
+    // participantsCount = именные записи (+ их гости) ПЛЮС места, занятые организатором
+    // вручную через счётчик +/- (без имени/почты) -- обе цифры одинаково занимают места
+    var participantsCount = headcountOf(active) + reservedCount;
     var isFull = maxParticipants ? participantsCount >= Number(maxParticipants) : false;
     var isOpen = status === 'Набор открыт' && !isFull && !isClosed;
     var interested = (signups[key] || []).filter(function (p) { return p.status === 'Интересуюсь'; });
@@ -182,6 +188,7 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
       setting: setting || '',
       imageUrl: imageUrl || '',
       participantsCount: participantsCount,
+      reservedCount: reservedCount,
       // structured, not pre-joined into a string, so the client can show each participant's
       // corporate email as a hover tooltip next to their (capitalized) name
       participants: active.map(function (p) { return { name: capitalizeFirst(p.name), email: p.email, guests: p.guests || 0 }; }),
@@ -339,7 +346,8 @@ function handleCreateEvent(body) {
     setting,
     imageUrl,
     organizerEmail,
-    isClosed
+    isClosed,
+    0 // Занято организатором -- счётчик мест без имени/почты, изначально 0
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
@@ -382,6 +390,48 @@ function handlePublish(body) {
 
     sheet.getRange(r + 1, 9).setValue('Набор открыт'); // столбец I = Статус
     return { ok: true };
+  }
+  return { ok: false, error: 'event not found' };
+}
+
+// организатор (или амбассадор) руками отмечает +1/-1 место как "занято", без указания
+// имени/почты -- удобно, если часть игроков договорилась вне сайта (в чате, лично и т.п.).
+// Хранится отдельным числом в столбце S, независимо от именных записей в «Записи»;
+// participantsCount на сайте складывает и то, и другое.
+function handleAdjustReserved(body) {
+  var date = body.date, time = body.time, game = body.game;
+  var delta = Math.trunc(Number(body.delta) || 0);
+  if (!date || !game || !delta) return { ok: false, error: 'missing fields' };
+
+  var email = normalizeEmail(body.email || '');
+  var hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    if (!row[0] || !row[4]) continue;
+    if (formatDate(row[0]) !== date || formatTimeVal(row[1]) !== String(time || '') || row[4] !== game) continue;
+
+    var organizerEmail = normalizeEmail(row[16] || '');
+    var isCreator = !!email && !!organizerEmail && email === organizerEmail;
+    if (!isCreator && !hasAmbassadorAccess) return { ok: false, error: 'forbidden' };
+
+    var maxParticipants = row[7] ? Number(row[7]) : null;
+    var reserved = Number(row[18]) || 0;
+    var signups = getAllSignupStates();
+    var key = eventKey(date, time, game);
+    var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
+    var headcount = headcountOf(active);
+
+    var next = reserved + delta;
+    if (next < 0) next = 0;
+    if (maxParticipants && headcount + next > maxParticipants) {
+      return { ok: false, error: 'full' };
+    }
+
+    sheet.getRange(r + 1, 19).setValue(next); // столбец S = Занято организатором
+    return { ok: true, reservedCount: next, participantsCount: headcount + next };
   }
   return { ok: false, error: 'event not found' };
 }

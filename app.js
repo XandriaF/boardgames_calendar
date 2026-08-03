@@ -294,7 +294,9 @@
 
     var participants = document.createElement('div');
     participants.className = 'card-participants';
-    var countText = ev.maxParticipants ? (ev.participantsCount + ' из ' + ev.maxParticipants) : (ev.participantsCount + ' записалось');
+    var countText = ev.maxParticipants
+      ? (ev.participantsCount + ' из ' + ev.maxParticipants + ' (свободно: ' + Math.max(0, ev.maxParticipants - ev.participantsCount) + ')')
+      : (ev.participantsCount + ' записалось');
     participants.innerHTML = '<b>' + countText + '</b>';
     if (ev.participants && ev.participants.length) {
       var namesWrap = document.createElement('span');
@@ -320,6 +322,14 @@
       interestLine.textContent = '🙋 ещё ' + ev.interestCount + ' ' + pluralizeWant(ev.interestCount) + ' сыграть в другое время';
     }
 
+    // организатор может вручную отметить места как занятые (+/-), без имени/почты --
+    // например, если часть игроков договорилась вне сайта. Виден только самому организатору.
+    var reservedRow = null;
+    var me = getMe();
+    if (ev.status !== 'Отменено' && ev.organizerEmail && me && me.email && me.email === ev.organizerEmail) {
+      reservedRow = renderReservedStepper(ev);
+    }
+
     var isRegistered = state.registeredIds.indexOf(ev.id) !== -1;
     var actions = document.createElement('div');
     actions.className = 'card-actions';
@@ -340,8 +350,51 @@
     if (links) card.appendChild(links);
     card.appendChild(participants);
     if (interestLine) card.appendChild(interestLine);
+    if (reservedRow) card.appendChild(reservedRow);
     card.appendChild(actions);
     return card;
+  }
+
+  // счётчик +/- для организатора: помечает места как занятые без указания имени/почты
+  // (например, кто-то договорился вне сайта). Считается наравне с именными записями.
+  function renderReservedStepper(ev) {
+    var row = document.createElement('div');
+    row.className = 'card-reserved';
+
+    var label = document.createElement('span');
+    label.textContent = 'Занято без записи: ' + (ev.reservedCount || 0);
+    row.appendChild(label);
+
+    var minusBtn = document.createElement('button');
+    minusBtn.type = 'button';
+    minusBtn.className = 'stepper-btn';
+    minusBtn.textContent = '−';
+    minusBtn.disabled = !(ev.reservedCount > 0);
+    minusBtn.addEventListener('click', function () { adjustReserved(ev, -1); });
+    row.appendChild(minusBtn);
+
+    var plusBtn = document.createElement('button');
+    plusBtn.type = 'button';
+    plusBtn.className = 'stepper-btn';
+    plusBtn.textContent = '+';
+    row.appendChild(plusBtn);
+    plusBtn.addEventListener('click', function () { adjustReserved(ev, 1); });
+
+    return row;
+  }
+
+  function adjustReserved(ev, delta) {
+    var me = getMe();
+    if (!me || !me.email) return;
+    apiPost({ action: 'adjustReserved', date: ev.date, time: ev.time, game: ev.game, email: me.email, delta: delta })
+      .then(function (res) {
+        if (!res.ok) {
+          if (res.error === 'full') alert('Мест больше нет — увеличьте макс. участников или уменьшите резерв');
+          else alert('Не получилось изменить счётчик, попробуйте ещё раз');
+          return;
+        }
+        refresh();
+      });
   }
 
   function pluralizeWant(n) {

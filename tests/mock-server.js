@@ -9,18 +9,18 @@ function capitalizeFirst(s) {
 }
 
 const events = [
-  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg', isClosed: false },
-  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
-  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
+  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg', isClosed: false, reservedCount: 0 },
+  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
+  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
   // deliberately in the past relative to "today" (sandbox clock is 2026-07-31) and still
   // marked "Набор открыт" -- exercises the client-side past-event override on its own
-  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
+  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
   // scheduled/private: not published yet -- only visible to olya@beeline.ru (its creator)
   // or an ambassador, until it's explicitly published
-  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
+  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
   // closed/private: publicly-statused but hidden from the general grid -- visible only to
   // its organizer, ambassadors, or its (pre-added) participants
-  { date: '2026-08-20', time: '18:00', city: 'Москва', format: 'Кооперативная', game: 'Секретный клуб', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: true },
+  { date: '2026-08-20', time: '18:00', city: 'Москва', format: 'Кооперативная', game: 'Секретный клуб', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: true, reservedCount: 0 },
 ];
 
 let signups = [];
@@ -76,7 +76,8 @@ function visibleEvents(viewerEmail, hasAmbassadorAccess) {
   }).map(e => {
     const key = eventKey(e);
     const active = computeActive(key);
-    const headcount = headcountOf(active);
+    const reservedCount = e.reservedCount || 0;
+    const headcount = headcountOf(active) + reservedCount;
     const isFull = e.maxParticipants ? headcount >= e.maxParticipants : false;
     const isOpen = e.status === 'Набор открыт' && !isFull && !e.isClosed;
     const interested = computeInterested(key);
@@ -87,6 +88,7 @@ function visibleEvents(viewerEmail, hasAmbassadorAccess) {
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
       teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '', imageUrl: e.imageUrl || '',
       participantsCount: headcount,
+      reservedCount: reservedCount,
       participants: active.map(a => ({ name: capitalizeFirst(a.name), email: a.email, guests: a.guests || 0 })),
       isOpen, isFull, interestCount: interested.length
     };
@@ -197,7 +199,7 @@ const server = http.createServer((req, res) => {
           maxParticipants: payload.maxParticipants || null, status, note: payload.note || '',
           difficulty: payload.difficulty || '', maxDuration: payload.maxDuration || null,
           teseraUrl: payload.teseraUrl || '', bggUrl: payload.bggUrl || '', setting: payload.setting || '',
-          imageUrl: payload.imageUrl || '', isClosed
+          imageUrl: payload.imageUrl || '', isClosed, reservedCount: 0
         });
         if (isClosed && Array.isArray(payload.closedParticipants)) {
           payload.closedParticipants.forEach(p => {
@@ -208,6 +210,23 @@ const server = http.createServer((req, res) => {
           });
         }
         res.end(JSON.stringify({ ok: true, id: dupKey, status }));
+        return;
+      }
+      if (payload.action === 'adjustReserved') {
+        if (!ev) { res.end(JSON.stringify({ ok: false, error: 'event not found' })); return; }
+        const delta = Math.trunc(Number(payload.delta) || 0);
+        if (!payload.date || !payload.game || !delta) { res.end(JSON.stringify({ ok: false, error: 'missing fields' })); return; }
+        const hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
+        const isCreator = !!email && !!ev.organizerEmail && email === ev.organizerEmail.toLowerCase();
+        if (!isCreator && !hasAmbassadorAccess) { res.end(JSON.stringify({ ok: false, error: 'forbidden' })); return; }
+        const headcount = headcountOf(computeActive(key));
+        let next = (ev.reservedCount || 0) + delta;
+        if (next < 0) next = 0;
+        if (ev.maxParticipants && headcount + next > ev.maxParticipants) {
+          res.end(JSON.stringify({ ok: false, error: 'full' })); return;
+        }
+        ev.reservedCount = next;
+        res.end(JSON.stringify({ ok: true, reservedCount: next, participantsCount: headcount + next }));
         return;
       }
       if (payload.action === 'identify') {

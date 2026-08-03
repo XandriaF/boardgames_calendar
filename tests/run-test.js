@@ -160,7 +160,7 @@ async function identifyVia(doc, name, email, pin) {
   await waitFor(() => {
     const grid = doc.getElementById('eventsGrid');
     const card = Array.from(grid.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
-    return card && card.querySelector('.card-participants b').textContent === '1 из 2';
+    return card && card.querySelector('.card-participants b').textContent === '1 из 2 (свободно: 1)';
   });
   const updatedCard = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   const updatedBtn = updatedCard.querySelector('button');
@@ -172,7 +172,7 @@ async function identifyVia(doc, name, email, pin) {
   await waitFor(() => {
     const grid = doc.getElementById('eventsGrid');
     const card = Array.from(grid.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
-    return card && card.querySelector('.card-participants b').textContent === '0 из 2';
+    return card && card.querySelector('.card-participants b').textContent === '0 из 2 (свободно: 2)';
   });
   console.log('PASS: cancel works, count back to 0 из 2');
 
@@ -264,7 +264,7 @@ async function identifyVia(doc, name, email, pin) {
   draconCard3.querySelector('button').click(); // "Отменить запись"
   await waitFor(() => {
     const card = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
-    return card && card.querySelector('.card-participants b').textContent === '0 из 2';
+    return card && card.querySelector('.card-participants b').textContent === '0 из 2 (свободно: 2)';
   });
   console.log('PASS: cancel frees the event back to 0 из 2');
 
@@ -288,7 +288,7 @@ async function identifyVia(doc, name, email, pin) {
 
   await waitFor(() => {
     const card = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
-    return card && card.querySelector('.card-participants b').textContent === '2 из 2';
+    return card && card.querySelector('.card-participants b').textContent === '2 из 2 (свободно: 0)';
   });
   const draconCard5 = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   const guestNamesText = draconCard5.querySelector('.card-participants .names').textContent;
@@ -468,6 +468,90 @@ async function identifyVia(doc, name, email, pin) {
     throw new Error('correct PIN on a known email should set identity, got: ' + doc7.getElementById('whoAmIBtn').textContent);
   }
   console.log('PASS: correct PIN on a known email succeeds');
+
+  // 16. organizer-only "+/-" stepper for manually reserving seats without a name/email
+  const dom8 = freshDom(html);
+  dom8.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Даша', email: 'dasha@beeline.ru' }));
+  dom8.window.eval(appJs);
+  const doc8 = dom8.window.document;
+  await waitFor(() => Array.from(doc8.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем'));
+
+  const brassCard = Array.from(doc8.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+  const reservedRow = brassCard.querySelector('.card-reserved');
+  if (!reservedRow) throw new Error('organizer should see the "Занято без записи" stepper on their own event');
+  if (!reservedRow.textContent.includes('Занято без записи: 0')) throw new Error('reserved stepper should start at 0, got: ' + reservedRow.textContent);
+  const minusBtn = Array.from(reservedRow.querySelectorAll('button')).find(b => b.textContent === '−');
+  if (!minusBtn.disabled) throw new Error('minus button should be disabled when reserved count is 0');
+  console.log('PASS: organizer sees the reserved-seats stepper on their own event, starting at 0, "−" disabled');
+
+  const plusBtn = Array.from(reservedRow.querySelectorAll('button')).find(b => b.textContent === '+');
+  plusBtn.click();
+  await waitFor(() => {
+    const card = Array.from(doc8.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+    const row = card && card.querySelector('.card-reserved');
+    return row && row.textContent.includes('Занято без записи: 1');
+  });
+  console.log('PASS: clicking "+" increments the reserved count and re-renders');
+
+  const brassCardAfter = Array.from(doc8.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+  if (brassCardAfter.querySelector('.card-participants b').textContent !== '1 записалось') {
+    throw new Error('reserved seats should count toward participantsCount even without maxParticipants, got: ' + brassCardAfter.querySelector('.card-participants b').textContent);
+  }
+  console.log('PASS: reserved count is included in the participants-count display');
+
+  const minusBtnAfter = Array.from(brassCardAfter.querySelector('.card-reserved').querySelectorAll('button')).find(b => b.textContent === '−');
+  minusBtnAfter.click();
+  await waitFor(() => {
+    const card = Array.from(doc8.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+    const row = card && card.querySelector('.card-reserved');
+    return row && row.textContent.includes('Занято без записи: 0');
+  });
+  console.log('PASS: clicking "−" decrements the reserved count back to 0');
+
+  // a non-organizer must never see the stepper, even when logged in
+  const dom9 = freshDom(html);
+  dom9.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Кто-то', email: 'someone-else@beeline.ru' }));
+  dom9.window.eval(appJs);
+  const doc9 = dom9.window.document;
+  await waitFor(() => Array.from(doc9.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем'));
+  const brassCardForStranger = Array.from(doc9.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
+  if (brassCardForStranger.querySelector('.card-reserved')) throw new Error('non-organizer should not see the reserved-seats stepper');
+  console.log('PASS: the reserved-seats stepper is hidden from a non-organizer visitor');
+
+  // capacity is respected: a dedicated event with maxParticipants=1 rejects a second reservation
+  const ceForReserved = await fetch(API, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'createEvent', date: '2026-12-01', time: '18:00', city: 'Москва', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', game: 'Тест счётчика', maxParticipants: 1 })
+  }).then(r => r.json());
+  if (!ceForReserved.ok) throw new Error('setup: failed to create the dedicated capacity-test event');
+
+  const dom10 = freshDom(html);
+  dom10.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Даша', email: 'dasha@beeline.ru' }));
+  dom10.window.eval(appJs);
+  const doc10 = dom10.window.document;
+  await waitFor(() => Array.from(doc10.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тест счётчика'));
+
+  const testCard = Array.from(doc10.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тест счётчика');
+  const testPlusBtn = Array.from(testCard.querySelector('.card-reserved').querySelectorAll('button')).find(b => b.textContent === '+');
+  testPlusBtn.click();
+  await waitFor(() => {
+    const card = Array.from(doc10.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тест счётчика');
+    return card.querySelector('.card-reserved').textContent.includes('Занято без записи: 1');
+  });
+  const testCardFull = Array.from(doc10.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тест счётчика');
+  if (testCardFull.querySelector('.card-participants b').textContent !== '1 из 1 (свободно: 0)') {
+    throw new Error('"из"/"свободно" text wrong after reserving the only seat, got: ' + testCardFull.querySelector('.card-participants b').textContent);
+  }
+  console.log('PASS: reserving the last seat fills the event and shows "свободно: 0"');
+
+  const testPlusBtnAgain = Array.from(testCardFull.querySelector('.card-reserved').querySelectorAll('button')).find(b => b.textContent === '+');
+  testPlusBtnAgain.click();
+  await wait(400);
+  const testCardStill1 = Array.from(doc10.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тест счётчика');
+  if (!testCardStill1.querySelector('.card-reserved').textContent.includes('Занято без записи: 1')) {
+    throw new Error('reserving beyond maxParticipants should be rejected, reserved count should stay at 1, got: ' + testCardStill1.querySelector('.card-reserved').textContent);
+  }
+  console.log('PASS: reserving beyond maxParticipants is rejected server-side, count stays capped');
 
   console.log('\nALL TESTS PASSED');
   process.exit(0);
