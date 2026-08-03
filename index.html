@@ -35,7 +35,6 @@
       <span class="filter-label">Это вы</span>
       <div class="pillrow">
         <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
-        <button class="btn-ghost" id="ambassadorBtn" type="button">я — амбассадор</button>
       </div>
     </div>
   </div>
@@ -52,12 +51,12 @@
   <p class="cap mut3 footer-note" style="margin-top:6px"><a href="organizer.html" style="color:inherit">для организаторов: анонсировать новую игру →</a></p>
 </div>
 
-<!-- Модалка: кто вы (имя+почта), используется и при первой записи -->
+<!-- Модалка: кто вы (имя+почта+код), используется и при первой записи -->
 <div class="modal-overlay" id="whoAmIOverlay" hidden>
   <div class="modal">
     <button class="modal-close" data-close>×</button>
     <h3>Как вас записать?</h3>
-    <p class="modal-hint">Имя увидят остальные участники игры. Почта нужна, чтобы вы могли отменить запись позже.</p>
+    <p class="modal-hint">Имя увидят остальные участники игры. Почта и код нужны, чтобы никто другой не мог записаться или отменить запись от вашего имени.</p>
     <label class="field">
       <span>Имя</span>
       <input type="text" id="inputName" placeholder="Даша Иванова" autocomplete="name">
@@ -66,7 +65,13 @@
       <span>Корпоративная почта</span>
       <input type="email" id="inputEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
     </label>
+    <label class="field">
+      <span>Код (4 цифры)</span>
+      <input type="text" id="inputPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <span class="field-hint">Заходите с этой почтой впервые — просто придумайте код, он закрепится за вами. Почта уже знакома сайту — введите тот же код, что и в прошлый раз.</span>
+    </label>
     <button class="btn-primary" id="saveWhoAmI" type="button">Сохранить</button>
+    <p class="modal-error" id="whoAmIError" hidden></p>
   </div>
 </div>
 
@@ -76,14 +81,7 @@
     <button class="modal-close" data-close>×</button>
     <h3 id="signupTitle">Записаться на игру</h3>
     <p class="modal-hint" id="signupSubtitle"></p>
-    <label class="field">
-      <span>Имя</span>
-      <input type="text" id="signupName" placeholder="Даша Иванова" autocomplete="name">
-    </label>
-    <label class="field">
-      <span>Корпоративная почта</span>
-      <input type="email" id="signupEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
-    </label>
+    <p class="field-hint" id="signupAsWhom"></p>
     <label class="field">
       <span>С гостями</span>
       <select id="signupGuests"></select>
@@ -100,32 +98,9 @@
     <button class="modal-close" data-close>×</button>
     <h3 id="interestTitle">Проявить интерес</h3>
     <p class="modal-hint" id="interestSubtitle">Не подходит именно эта дата, время или место? Дайте знать организатору, что хотели бы сыграть — он увидит, что есть желающие, и сможет учесть это в следующий раз.</p>
-    <label class="field">
-      <span>Имя</span>
-      <input type="text" id="interestName" placeholder="Даша Иванова" autocomplete="name">
-    </label>
-    <label class="field">
-      <span>Корпоративная почта</span>
-      <input type="email" id="interestEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
-    </label>
+    <p class="field-hint" id="interestAsWhom"></p>
     <button class="btn-primary" id="confirmInterest" type="button">Отправить</button>
     <p class="modal-error" id="interestError" hidden></p>
-  </div>
-</div>
-
-<!-- Модалка «я — амбассадор» -- секретное слово открывает видимость ВСЕХ запланированных
-     (ещё не опубликованных) мероприятий, не только своих собственных -->
-<div class="modal-overlay" id="ambassadorOverlay" hidden>
-  <div class="modal">
-    <button class="modal-close" data-close>×</button>
-    <h3>Я — амбассадор</h3>
-    <p class="modal-hint">Введите секретное слово, чтобы видеть все запланированные (пока не опубликованные) мероприятия, а не только свои.</p>
-    <label class="field">
-      <span>Секретное слово</span>
-      <input type="text" id="ambassadorSecretInput" placeholder="секретное слово" autocomplete="off">
-    </label>
-    <button class="btn-primary" id="saveAmbassadorSecret" type="button">Сохранить</button>
-    <button class="btn-ghost" id="clearAmbassadorSecret" type="button" style="margin-top:10px">Выключить режим амбассадора</button>
   </div>
 </div>
 

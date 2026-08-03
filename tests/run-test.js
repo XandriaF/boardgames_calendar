@@ -15,14 +15,28 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   throw new Error('waitFor timed out');
 }
 
+function freshDom(html) {
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  dom.window.fetch = fetch;
+  dom.window.confirm = () => true;
+  dom.window.alert = (msg) => { console.log('[alert]', msg); };
+  dom.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
+  return dom;
+}
+
+// simulates identifying as name/email/pin via the "это вы" modal -- assumes it's already open
+async function identifyVia(doc, name, email, pin) {
+  doc.getElementById('inputName').value = name;
+  doc.getElementById('inputEmail').value = email;
+  doc.getElementById('inputPin').value = pin;
+  doc.getElementById('saveWhoAmI').click();
+  await waitFor(() => doc.getElementById('whoAmIOverlay').hidden === true, 5000);
+}
+
 (async () => {
   const html = fs.readFileSync(path.join(SITE, 'index.html'), 'utf8');
-  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom = freshDom(html);
   const { window } = dom;
-  window.fetch = fetch; // node's native fetch
-  window.confirm = () => true;
-  window.alert = (msg) => { console.log('[alert]', msg); };
-  window.APP_CONFIG = { APPS_SCRIPT_URL: API };
 
   const appJs = fs.readFileSync(path.join(SITE, 'app.js'), 'utf8');
   window.eval(appJs);
@@ -30,7 +44,9 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   const doc = window.document;
 
   // 1. wait for events to render -- 3 cards expected: the past-dated 4th event
-  // (Корона из пепла) is hidden by default now, until "показать прошедшие" is clicked
+  // (Корона из пепла) is hidden by default now, until "показать прошедшие" is clicked.
+  // The scheduled ("Тайный проект") and closed ("Секретный клуб") events stay hidden from
+  // this anonymous visitor entirely, so they don't count here either.
   await waitFor(() => doc.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
   console.log('PASS: 3 cards rendered (past event hidden by default)');
 
@@ -112,25 +128,33 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (noExtrasCard.querySelector('.card-image')) throw new Error('Descent should have no image, since imageUrl is empty');
   console.log('PASS: event without difficulty/duration/links renders cleanly (no stray elements)');
 
-  // 6. sign up for the open event (Таверна Красный дракон, max 2)
+  // 6. no identity set yet -- clicking "Записаться" must redirect to the "это вы" modal
+  // instead of a free-text signup form (identity is now set exactly once, via PIN)
   const openCard = cards.find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   const signBtn = openCard.querySelector('button');
   if (signBtn.disabled) throw new Error('open event button should not be disabled');
   signBtn.click();
-  await waitFor(() => !doc.getElementById('signupOverlay').hidden);
-  doc.getElementById('signupName').value = 'Тестовый Игрок';
-  doc.getElementById('signupEmail').value = 'test.player@beeline.ru';
-  doc.getElementById('confirmSignup').click();
+  await waitFor(() => !doc.getElementById('whoAmIOverlay').hidden);
+  if (!doc.getElementById('signupOverlay').hidden) throw new Error('signup modal should not open before identity is set');
+  console.log('PASS: signing up with no saved identity opens "это вы" first');
 
-  await waitFor(() => doc.getElementById('signupOverlay').hidden === true, 5000);
-  console.log('PASS: signup modal submitted and closed');
-
-  // the "это вы" button must reflect the identity just saved during signup, not keep
-  // showing the generic "указать имя и почту" label forever -- and must show the email too
+  // first time this email is seen -- any 4-digit PIN is accepted and the account is created
+  await identifyVia(doc, 'Тестовый Игрок', 'test.player@beeline.ru', '1234');
   if (doc.getElementById('whoAmIBtn').textContent !== 'Тестовый Игрок · test.player@beeline.ru') {
-    throw new Error('whoAmIBtn should show the saved name+email after signup, got: ' + doc.getElementById('whoAmIBtn').textContent);
+    throw new Error('whoAmIBtn should show the saved name+email after identify, got: ' + doc.getElementById('whoAmIBtn').textContent);
   }
-  console.log('PASS: "это вы" button shows saved name+email after signup ->', doc.getElementById('whoAmIBtn').textContent);
+  console.log('PASS: first-time identify with a fresh PIN creates the account and sets identity');
+
+  // now that identity is set, "Записаться" opens the real signup modal, showing who we are
+  signBtn.click();
+  await waitFor(() => !doc.getElementById('signupOverlay').hidden);
+  const asWhomText = doc.getElementById('signupAsWhom').textContent;
+  if (!asWhomText.includes('Тестовый Игрок') || !asWhomText.includes('test.player@beeline.ru')) {
+    throw new Error('signup modal should show the already-identified user, got: ' + asWhomText);
+  }
+  doc.getElementById('confirmSignup').click();
+  await waitFor(() => doc.getElementById('signupOverlay').hidden === true, 5000);
+  console.log('PASS: signup modal (no free-text fields) submits using the already-identified user');
 
   // after refresh, participant count should be 1 of 2, and button should now be "Отменить запись" for this browser's saved identity
   await waitFor(() => {
@@ -211,23 +235,19 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (togglePastBtn.textContent !== 'показать прошедшие') throw new Error('togglePastBtn label should flip back: ' + togglePastBtn.textContent);
   console.log('PASS: "скрыть прошедшие" hides the past event again');
 
-  // 11. sign up once more, then simulate a fresh page load with a saved identity: confirm
-  // events + registeredIds now arrive in a single request instead of a second action=myStatus call
+  // 11. sign up once more (identity already set, so no whoAmI redirect this time), then
+  // simulate a fresh page load with a saved identity: confirm events + registeredIds now
+  // arrive in a single request instead of a second action=myStatus call
   const openCard2 = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   openCard2.querySelector('button').click();
   await waitFor(() => !doc.getElementById('signupOverlay').hidden);
-  doc.getElementById('signupName').value = 'Тестовый Игрок';
-  doc.getElementById('signupEmail').value = 'test.player@beeline.ru';
   doc.getElementById('confirmSignup').click();
   await waitFor(() => doc.getElementById('signupOverlay').hidden === true, 5000);
 
-  const dom3 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  const dom3 = freshDom(html);
   dom3.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Тестовый Игрок', email: 'test.player@beeline.ru' }));
   let fetchCount = 0;
   dom3.window.fetch = function () { fetchCount++; return fetch.apply(null, arguments); };
-  dom3.window.confirm = () => true;
-  dom3.window.alert = () => {};
-  dom3.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
   dom3.window.eval(appJs);
   const doc3 = dom3.window.document;
   await waitFor(() => doc3.getElementById('eventsGrid').querySelectorAll('.card').length === 3);
@@ -238,14 +258,20 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (fetchCount !== 1) throw new Error('expected exactly 1 network request for an identity-aware initial load, got ' + fetchCount);
   console.log('PASS: fresh load with saved identity resolves registration status in a single request (fetchCount=1)');
 
-  // 12. guests (+1/+2): free the event back to 0/2, then confirm the guest dropdown caps
-  // itself to remaining capacity and that a guest signup consumes multiple seats at once
+  // 12. guests (+1/+2): free the event back to 0/2, switch to a fresh identity via "это вы"
+  // (since the signup modal no longer accepts free-text name/email), then confirm the guest
+  // dropdown caps itself to remaining capacity and that a guest signup consumes multiple seats
   draconCard3.querySelector('button').click(); // "Отменить запись"
   await waitFor(() => {
     const card = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
     return card && card.querySelector('.card-participants b').textContent === '0 из 2';
   });
   console.log('PASS: cancel frees the event back to 0 из 2');
+
+  doc3.getElementById('whoAmIBtn').click();
+  await waitFor(() => !doc3.getElementById('whoAmIOverlay').hidden);
+  await identifyVia(doc3, 'Гость Тестов', 'guest.test@beeline.ru', '4321');
+  console.log('PASS: switched identity via "это вы" to a second account');
 
   const draconCard4 = Array.from(doc3.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Таверна Красный дракон');
   draconCard4.querySelector('button').click(); // "Записаться"
@@ -256,8 +282,6 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   console.log('PASS: guest dropdown limited to remaining capacity ->', guestOptions);
 
-  doc3.getElementById('signupName').value = 'Гость Тестов';
-  doc3.getElementById('signupEmail').value = 'guest.test@beeline.ru';
   doc3.getElementById('signupGuests').value = '1';
   doc3.getElementById('confirmSignup').click();
   await waitFor(() => doc3.getElementById('signupOverlay').hidden === true, 5000);
@@ -271,9 +295,8 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   if (!guestNamesText.includes('Гость Тестов +1')) throw new Error('participant names should show guest count, got: ' + guestNamesText);
   console.log('PASS: signup with +1 guest occupies 2 seats and shows "Имя +1" in participant list ->', guestNamesText);
 
-  // the signup form's identity (guest.test@beeline.ru) is now the "current user" (setMe()
-  // runs on every successful signup), and they themselves are registered, so the button
-  // shows "Отменить запись" for them even though the event is full for anyone else
+  // the currently-identified user (guest.test@beeline.ru) is registered, so the button
+  // shows "Отменить запись" for them even though the event is now full for anyone else
   const draconBtnAfterGuestFill = draconCard5.querySelector('button');
   if (draconBtnAfterGuestFill.textContent !== 'Отменить запись') {
     throw new Error('registered user should see "Отменить запись" even on a now-full event, got: ' + draconBtnAfterGuestFill.textContent);
@@ -290,16 +313,24 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   console.log('PASS: interest button hidden for an event the current user is already registered for');
 
+  // switch `doc`'s identity before expressing interest on a different game, so the "запись"
+  // and "интерес" identities are clearly distinct people
+  doc.getElementById('whoAmIBtn').click();
+  await waitFor(() => !doc.getElementById('whoAmIOverlay').hidden);
+  await identifyVia(doc, 'Интересующийся Игрок', 'interested.player@beeline.ru', '5555');
+
   const fullCardForInterest = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
   const interestBtn = Array.from(fullCardForInterest.querySelectorAll('button')).find(b => b.textContent === 'Проявить интерес');
   if (!interestBtn) throw new Error('interest button missing on a full, not-registered event');
   interestBtn.click();
   await waitFor(() => !doc.getElementById('interestOverlay').hidden);
-  doc.getElementById('interestName').value = 'Интересующийся Игрок';
-  doc.getElementById('interestEmail').value = 'interested.player@beeline.ru';
+  const interestAsWhomText = doc.getElementById('interestAsWhom').textContent;
+  if (!interestAsWhomText.includes('Интересующийся Игрок') || !interestAsWhomText.includes('interested.player@beeline.ru')) {
+    throw new Error('interest modal should show the already-identified user, got: ' + interestAsWhomText);
+  }
   doc.getElementById('confirmInterest').click();
   await waitFor(() => doc.getElementById('interestOverlay').hidden === true, 5000);
-  console.log('PASS: interest modal submits and closes');
+  console.log('PASS: interest modal (no free-text fields) submits using the already-identified user');
 
   await waitFor(() => {
     const card = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Брасс Бирмингем');
@@ -316,14 +347,12 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   console.log('PASS: expressing interest does not affect participantsCount');
 
   // 14. «Запланировано» ("Тайный проект", owned by olya@beeline.ru): hidden from the general
-  // public by default, visible to its creator by email, hidden from a wrong/no ambassador
-  // secret, visible with the correct one (case-insensitive), and publishable from the card.
-  const dom4 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
+  // public by default, visible to its creator by email, hidden from a regular identified
+  // visitor without the ambassador role, and visible (plus publishable) once that visitor's
+  // account is granted the "Амбассадор" role -- which can only ever be done by editing the
+  // «Аккаунты» sheet directly (simulated here via the test-only test_setRole backdoor).
+  const dom4 = freshDom(html);
   dom4.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Оля', email: 'olya@beeline.ru' }));
-  dom4.window.fetch = fetch;
-  dom4.window.confirm = () => true;
-  dom4.window.alert = () => {};
-  dom4.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
   dom4.window.eval(appJs);
   const doc4 = dom4.window.document;
   await waitFor(() => Array.from(doc4.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'));
@@ -334,53 +363,111 @@ async function waitFor(cond, timeout = 5000, step = 50) {
   }
   console.log('PASS: creator sees their own scheduled (unpublished) event by email, with a "Запланировано" badge');
 
-  // not visible to a random logged-in visitor without the ambassador secret (current identity
+  // she's also the organizer of the closed event fixture ("Секретный клуб") -- she should
+  // see it too, tagged "Закрытое", even though she never added herself as a participant
+  const closedCardForOrganizer = Array.from(doc4.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Секретный клуб');
+  if (!closedCardForOrganizer) throw new Error('organizer should see their own closed event');
+  const closedTagsForOrganizer = Array.from(closedCardForOrganizer.querySelectorAll('.card-tags .tag')).map(t => t.textContent);
+  if (!closedTagsForOrganizer.includes('Закрытое')) throw new Error('closed event should carry a "Закрытое" tag, got: ' + closedTagsForOrganizer);
+  console.log('PASS: organizer sees their own closed event, tagged "Закрытое"');
+
+  // not visible to a random logged-in visitor without the ambassador role (current identity
   // on `doc` is interested.player@beeline.ru from the interest test above)
   if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект')) {
-    throw new Error('scheduled event should not be visible to a non-creator without the ambassador secret');
+    throw new Error('scheduled event should not be visible to a non-creator without the ambassador role');
   }
-  console.log('PASS: scheduled event hidden from a regular visitor');
-
-  // wrong secret: still hidden
-  doc.getElementById('ambassadorBtn').click();
-  await waitFor(() => !doc.getElementById('ambassadorOverlay').hidden);
-  doc.getElementById('ambassadorSecretInput').value = 'not-the-password';
-  doc.getElementById('saveAmbassadorSecret').click();
-  await waitFor(() => doc.getElementById('ambassadorOverlay').hidden === true, 5000);
-  await wait(300); // let the triggered refresh() settle
-  if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект')) {
-    throw new Error('a wrong ambassador secret must not reveal scheduled events');
+  if (Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Секретный клуб')) {
+    throw new Error('closed event should not be visible to someone who is neither its organizer, an ambassador, nor a listed participant');
   }
-  console.log('PASS: a wrong ambassador secret does not reveal scheduled events');
+  console.log('PASS: scheduled and closed events both hidden from a regular visitor without the ambassador role');
 
-  // correct secret (mixed case, to exercise the case-insensitive compare end-to-end over HTTP)
-  doc.getElementById('ambassadorBtn').click();
-  await waitFor(() => !doc.getElementById('ambassadorOverlay').hidden);
-  doc.getElementById('ambassadorSecretInput').value = 'Я-Амбассадор';
-  doc.getElementById('saveAmbassadorSecret').click();
-  await waitFor(() => Array.from(doc.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'), 5000);
-  const ambassadorCard = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
+  // the pre-seeded participant ("Петя") of the closed event fixture should see it among his
+  // own events, with a working "Отменить запись" (he's an active signup, same as any other)
+  const dom4p = freshDom(html);
+  dom4p.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Петя', email: 'petya@beeline.ru' }));
+  dom4p.window.eval(appJs);
+  const doc4p = dom4p.window.document;
+  await waitFor(() => Array.from(doc4p.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Секретный клуб'));
+  const closedCardForParticipant = Array.from(doc4p.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Секретный клуб');
+  const participantBtn = closedCardForParticipant.querySelector('button');
+  if (participantBtn.textContent !== 'Отменить запись') throw new Error('a participant added to a closed event should see "Отменить запись", got: ' + participantBtn.textContent);
+  console.log('PASS: a participant added to a closed event at creation sees it among their own events');
+
+  // granting the "Амбассадор" role (simulating a manual edit of the «Аккаунты» sheet --
+  // there is no way to do this from the site itself)
+  await fetch(API, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'test_setRole', email: 'interested.player@beeline.ru', role: 'Амбассадор' })
+  });
+
+  const dom4b = freshDom(html);
+  dom4b.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Интересующийся Игрок', email: 'interested.player@beeline.ru' }));
+  dom4b.window.eval(appJs);
+  const doc4b = dom4b.window.document;
+  await waitFor(() => Array.from(doc4b.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'));
+  const ambassadorCard = Array.from(doc4b.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
   const publishBtn = Array.from(ambassadorCard.querySelectorAll('button')).find(b => b.textContent === 'Опубликовать');
   if (!publishBtn) throw new Error('ambassador should see a "Опубликовать" button on a scheduled event');
-  console.log('PASS: correct ambassador secret reveals the scheduled event with a publish button, even though not its creator');
+  console.log('PASS: an account with the ambassador role (set only via the sheet) reveals the scheduled event with a publish button, even though not its creator');
+
+  const closedCardForAmbassador = Array.from(doc4b.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Секретный клуб');
+  if (!closedCardForAmbassador) throw new Error('ambassador should also see closed events, even without being their organizer or a listed participant');
+  console.log('PASS: ambassador role also reveals closed events');
 
   // publishing (as ambassador, not the creator) makes it public for everyone
   publishBtn.click();
   await waitFor(() => {
-    const card = Array.from(doc.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
+    const card = Array.from(doc4b.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Тайный проект');
     return card && card.querySelector('.badge').textContent !== 'Запланировано';
   }, 5000);
   console.log('PASS: ambassador can publish a scheduled event they did not create');
 
-  const dom5 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
-  dom5.window.fetch = fetch;
-  dom5.window.confirm = () => true;
-  dom5.window.alert = () => {};
-  dom5.window.APP_CONFIG = { APPS_SCRIPT_URL: API };
+  const dom5 = freshDom(html);
   dom5.window.eval(appJs);
   const doc5 = dom5.window.document;
   await waitFor(() => Array.from(doc5.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Тайный проект'));
-  console.log('PASS: published event is now visible to a completely anonymous fresh visitor');
+  if (Array.from(doc5.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Секретный клуб')) {
+    throw new Error('closed event should still be hidden from a completely anonymous visitor after an unrelated event got published');
+  }
+  console.log('PASS: published event is now visible to a completely anonymous fresh visitor, closed event remains hidden from them');
+
+  // 15. PIN identify flow in isolation: wrong PIN on a known email is rejected (with a
+  // pointer to the ambassador's contact), the correct PIN then succeeds
+  const dom6 = freshDom(html);
+  dom6.window.eval(appJs);
+  const doc6 = dom6.window.document;
+  doc6.getElementById('whoAmIBtn').click();
+  await waitFor(() => !doc6.getElementById('whoAmIOverlay').hidden);
+  doc6.getElementById('inputName').value = 'Новый Пользователь';
+  doc6.getElementById('inputEmail').value = 'pin.test@beeline.ru';
+  doc6.getElementById('inputPin').value = '7777';
+  doc6.getElementById('saveWhoAmI').click();
+  await waitFor(() => doc6.getElementById('whoAmIOverlay').hidden === true, 5000);
+  console.log('PASS: brand-new email + any 4-digit PIN creates the account');
+
+  const dom7 = freshDom(html);
+  dom7.window.eval(appJs);
+  const doc7 = dom7.window.document;
+  doc7.getElementById('whoAmIBtn').click();
+  await waitFor(() => !doc7.getElementById('whoAmIOverlay').hidden);
+  doc7.getElementById('inputName').value = 'Новый Пользователь';
+  doc7.getElementById('inputEmail').value = 'pin.test@beeline.ru';
+  doc7.getElementById('inputPin').value = '0000'; // wrong
+  doc7.getElementById('saveWhoAmI').click();
+  await waitFor(() => !doc7.getElementById('whoAmIError').hidden, 5000);
+  const wrongPinMsg = doc7.getElementById('whoAmIError').textContent;
+  if (!wrongPinMsg.includes('ddkolesnik@beeline.ru')) throw new Error('wrong-PIN error should point to the ambassador contact, got: ' + wrongPinMsg);
+  if (doc7.getElementById('whoAmIOverlay').hidden) throw new Error('modal should stay open after a wrong PIN');
+  if (JSON.parse(dom7.window.localStorage.getItem('nastolki_me') || 'null')) throw new Error('identity must not be saved after a wrong PIN');
+  console.log('PASS: wrong PIN on a known email is rejected with a message pointing to the ambassador, identity not saved');
+
+  doc7.getElementById('inputPin').value = '7777'; // correct this time
+  doc7.getElementById('saveWhoAmI').click();
+  await waitFor(() => doc7.getElementById('whoAmIOverlay').hidden === true, 5000);
+  if (doc7.getElementById('whoAmIBtn').textContent !== 'Новый Пользователь · pin.test@beeline.ru') {
+    throw new Error('correct PIN on a known email should set identity, got: ' + doc7.getElementById('whoAmIBtn').textContent);
+  }
+  console.log('PASS: correct PIN on a known email succeeds');
 
   console.log('\nALL TESTS PASSED');
   process.exit(0);

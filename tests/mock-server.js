@@ -1,31 +1,35 @@
 const http = require('http');
 
-const AMBASSADOR_SECRET = 'я-амбассадор';
+const ROLE_AMBASSADOR = 'Амбассадор';
 
 function capitalizeFirst(s) {
   s = String(s || '').trim();
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-function normalizeSecret(s) { return String(s || '').trim().toLowerCase(); }
-function isAmbassador(secret) {
-  const s = normalizeSecret(secret);
-  return !!s && s === normalizeSecret(AMBASSADOR_SECRET);
-}
 
 const events = [
-  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg' },
-  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '' },
-  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '' },
+  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg', isClosed: false },
+  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
+  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
   // deliberately in the past relative to "today" (sandbox clock is 2026-07-31) and still
   // marked "Набор открыт" -- exercises the client-side past-event override on its own
-  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '' },
+  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
   // scheduled/private: not published yet -- only visible to olya@beeline.ru (its creator)
-  // or anyone who knows the ambassador secret, until it's explicitly published
-  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '' },
+  // or an ambassador, until it's explicitly published
+  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false },
+  // closed/private: publicly-statused but hidden from the general grid -- visible only to
+  // its organizer, ambassadors, or its (pre-added) participants
+  { date: '2026-08-20', time: '18:00', city: 'Москва', format: 'Кооперативная', game: 'Секретный клуб', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: true },
 ];
 
 let signups = [];
+// { email: { name, pin, role } } -- mirrors the «Аккаунты» sheet
+let accounts = {};
+
+// pre-seed the closed event's fixture with one participant so visibility tests have
+// something to assert against
+signups.push({ date: '2026-08-20', time: '18:00', game: 'Секретный клуб', name: 'Петя', email: 'petya@beeline.ru', status: 'Записан', guests: 0 });
 
 function eventKey(e) { return e.date + '|' + (e.time || '') + '|' + e.game; }
 
@@ -48,12 +52,25 @@ function headcountOf(active) {
   return active.reduce((sum, r) => sum + 1 + (r.guests || 0), 0);
 }
 
+function getAccountRole(email) {
+  email = (email || '').toLowerCase();
+  return (accounts[email] && accounts[email].role) || '';
+}
+function isAmbassadorEmail(email) {
+  return getAccountRole(email) === ROLE_AMBASSADOR;
+}
+
 function visibleEvents(viewerEmail, hasAmbassadorAccess) {
   viewerEmail = (viewerEmail || '').toLowerCase();
   return events.filter(e => {
-    if (['Набор открыт', 'Набрано', 'Отменено'].includes(e.status)) return true;
-    if (e.status === 'Запланировано') {
-      return (viewerEmail && e.organizerEmail && viewerEmail === e.organizerEmail.toLowerCase()) || hasAmbassadorAccess;
+    const key = eventKey(e);
+    const active = computeActive(key);
+    const isOrganizerOrAmbassador = (viewerEmail && e.organizerEmail && viewerEmail === e.organizerEmail.toLowerCase()) || hasAmbassadorAccess;
+    const isParticipant = !!viewerEmail && active.some(a => a.email === viewerEmail);
+    if (e.status === 'Запланировано') return isOrganizerOrAmbassador;
+    if (['Набор открыт', 'Набрано', 'Отменено'].includes(e.status)) {
+      if (e.isClosed) return isOrganizerOrAmbassador || isParticipant;
+      return true;
     }
     return false;
   }).map(e => {
@@ -61,12 +78,12 @@ function visibleEvents(viewerEmail, hasAmbassadorAccess) {
     const active = computeActive(key);
     const headcount = headcountOf(active);
     const isFull = e.maxParticipants ? headcount >= e.maxParticipants : false;
-    const isOpen = e.status === 'Набор открыт' && !isFull;
+    const isOpen = e.status === 'Набор открыт' && !isFull && !e.isClosed;
     const interested = computeInterested(key);
     return {
       id: key, date: e.date, time: e.time, city: capitalizeFirst(e.city), format: e.format, game: capitalizeFirst(e.game),
       place: e.place, organizer: capitalizeFirst(e.organizer), organizerEmail: e.organizerEmail || '',
-      maxParticipants: e.maxParticipants, status: e.status,
+      maxParticipants: e.maxParticipants, status: e.status, isClosed: !!e.isClosed,
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
       teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '', imageUrl: e.imageUrl || '',
       participantsCount: headcount,
@@ -83,7 +100,7 @@ const server = http.createServer((req, res) => {
     const action = url.searchParams.get('action') || 'events';
     if (action === 'events') {
       const email = (url.searchParams.get('email') || '').toLowerCase();
-      const hasAmbassadorAccess = isAmbassador(url.searchParams.get('secret') || '');
+      const hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
       const result = { ok: true, events: visibleEvents(email, hasAmbassadorAccess) };
       if (email) {
         const registered = [];
@@ -122,6 +139,7 @@ const server = http.createServer((req, res) => {
       if (payload.action === 'signup') {
         if (!ev) { res.end(JSON.stringify({ ok: false, error: 'event not found' })); return; }
         if (ev.status === 'Отменено') { res.end(JSON.stringify({ ok: false, error: 'event cancelled' })); return; }
+        if (ev.isClosed) { res.end(JSON.stringify({ ok: false, error: 'closed' })); return; }
         const active = computeActive(key);
         const guests = Math.max(0, Math.min(10, Math.floor(Number(payload.guests) || 0)));
         const requested = 1 + guests;
@@ -136,6 +154,7 @@ const server = http.createServer((req, res) => {
         if (!payload.date || !payload.game || !payload.name || !email) {
           res.end(JSON.stringify({ ok: false, error: 'missing fields' })); return;
         }
+        if (ev && ev.isClosed) { res.end(JSON.stringify({ ok: false, error: 'closed' })); return; }
         const activeMine = computeActive(key).find(a => a.email === email);
         if (activeMine) { res.end(JSON.stringify({ ok: true })); return; }
         signups.push({ date: payload.date, time: payload.time, game: payload.game, name: capitalizeFirst(payload.name), email, status: 'Интересуюсь', guests: 0 });
@@ -153,7 +172,7 @@ const server = http.createServer((req, res) => {
       }
       if (payload.action === 'publish') {
         if (!ev) { res.end(JSON.stringify({ ok: false, error: 'event not found' })); return; }
-        const hasAmbassadorAccess = isAmbassador(payload.secret || '');
+        const hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
         const isCreator = !!email && !!ev.organizerEmail && email === ev.organizerEmail.toLowerCase();
         if (!isCreator && !hasAmbassadorAccess) { res.end(JSON.stringify({ ok: false, error: 'forbidden' })); return; }
         if (ev.status !== 'Запланировано') { res.end(JSON.stringify({ ok: false, error: 'not scheduled' })); return; }
@@ -170,6 +189,7 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ ok: false, error: 'duplicate' })); return;
         }
         const status = payload.publishNow === false ? 'Запланировано' : 'Набор открыт';
+        const isClosed = !!payload.isClosed;
         events.push({
           date: payload.date, time: payload.time || '', city: capitalizeFirst(payload.city), format: payload.format || '',
           game: capitalizeFirst(payload.game), place: payload.place || '', organizer: capitalizeFirst(payload.organizer),
@@ -177,9 +197,45 @@ const server = http.createServer((req, res) => {
           maxParticipants: payload.maxParticipants || null, status, note: payload.note || '',
           difficulty: payload.difficulty || '', maxDuration: payload.maxDuration || null,
           teseraUrl: payload.teseraUrl || '', bggUrl: payload.bggUrl || '', setting: payload.setting || '',
-          imageUrl: payload.imageUrl || ''
+          imageUrl: payload.imageUrl || '', isClosed
         });
+        if (isClosed && Array.isArray(payload.closedParticipants)) {
+          payload.closedParticipants.forEach(p => {
+            const pEmail = (p && p.email || '').toLowerCase().trim();
+            if (!pEmail) return;
+            const pName = capitalizeFirst((p && p.name) || pEmail.split('@')[0]);
+            signups.push({ date: payload.date, time: payload.time || '', game: capitalizeFirst(payload.game), name: pName, email: pEmail, status: 'Записан', guests: 0 });
+          });
+        }
         res.end(JSON.stringify({ ok: true, id: dupKey, status }));
+        return;
+      }
+      if (payload.action === 'identify') {
+        const name = capitalizeFirst((payload.name || '').trim());
+        const idEmail = (payload.email || '').toLowerCase().trim();
+        const pin = String(payload.pin || '').trim();
+        if (!name || !idEmail) { res.end(JSON.stringify({ ok: false, error: 'missing_fields' })); return; }
+        if (!/^\d{4}$/.test(pin)) { res.end(JSON.stringify({ ok: false, error: 'invalid_pin' })); return; }
+        const existing = accounts[idEmail];
+        if (!existing) {
+          accounts[idEmail] = { name, pin, role: 'Участник' };
+          res.end(JSON.stringify({ ok: true, isNew: true }));
+          return;
+        }
+        if (existing.pin !== pin) { res.end(JSON.stringify({ ok: false, error: 'wrong_pin' })); return; }
+        existing.name = name;
+        res.end(JSON.stringify({ ok: true, isNew: false }));
+        return;
+      }
+      // test-only backdoor: in real life a role is only ever set by editing the
+      // «Аккаунты» sheet by hand -- this simulates that manual edit for the test suite,
+      // it does not exist as an action in the real Code.gs
+      if (payload.action === 'test_setRole') {
+        const rEmail = (payload.email || '').toLowerCase().trim();
+        if (!rEmail) { res.end(JSON.stringify({ ok: false, error: 'missing_fields' })); return; }
+        if (!accounts[rEmail]) accounts[rEmail] = { name: rEmail.split('@')[0], pin: '0000', role: payload.role || 'Участник' };
+        else accounts[rEmail].role = payload.role || 'Участник';
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
       res.end(JSON.stringify({ ok: false, error: 'unknown action' }));

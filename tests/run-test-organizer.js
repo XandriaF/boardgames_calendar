@@ -36,6 +36,14 @@ function fireEvent(win, el, type) {
 
   const doc = window.document;
 
+  // «Игра» must be the very first field in the announcement form
+  const formFields = Array.from(doc.querySelectorAll('.form-grid > *'));
+  const firstFieldInput = formFields[0].querySelector('input,select,textarea');
+  if (!firstFieldInput || firstFieldInput.id !== 'fGame') {
+    throw new Error('the "Игра" field should be first in the form, got first field containing id: ' + (firstFieldInput && firstFieldInput.id));
+  }
+  console.log('PASS: "Игра" is the first field in the announcement form');
+
   // fixed city dropdown renders immediately, including the trailing "Другой" catch-all option
   const cityOptions = Array.from(doc.getElementById('fCity').options).map(o => o.value);
   if (!cityOptions.includes('Онлайн') || !cityOptions.includes('Ростов-на-Дону') || cityOptions[cityOptions.length - 1] !== 'Другой') {
@@ -63,6 +71,23 @@ function fireEvent(win, el, type) {
     if (value === 'Другой') doc.getElementById('fCityOther').value = otherText;
   }
 
+  // there are no more free-text "Организатор"/"Email организатора" fields -- identify via
+  // "это вы" (name + email + 4-digit PIN) before submitting anything
+  if (doc.getElementById('organizerIdText').textContent.includes('@')) {
+    throw new Error('organizer identity should start unset');
+  }
+  doc.getElementById('whoAmIBtn').click();
+  await waitFor(() => !doc.getElementById('whoAmIOverlay').hidden);
+  doc.getElementById('inputName').value = 'Игорь';
+  doc.getElementById('inputEmail').value = 'igor@beeline.ru';
+  doc.getElementById('inputPin').value = '2468';
+  doc.getElementById('saveWhoAmI').click();
+  await waitFor(() => doc.getElementById('whoAmIOverlay').hidden === true, 5000);
+  if (!doc.getElementById('organizerIdText').textContent.includes('Игорь') || !doc.getElementById('organizerIdText').textContent.includes('igor@beeline.ru')) {
+    throw new Error('organizer identity display should show the saved name+email, got: ' + doc.getElementById('organizerIdText').textContent);
+  }
+  console.log('PASS: identified as organizer via "это вы" (name + email + PIN)');
+
   // fill the form -- "Казань" isn't in the fixed list, so exercises the "Другой" free-text path
   doc.getElementById('fDate').value = '2026-09-15';
   doc.getElementById('fTime').value = '19:30';
@@ -71,8 +96,6 @@ function fireEvent(win, el, type) {
   selectGenres('НРИ', 'Приключение');
   doc.getElementById('fGame').value = 'Зов Ктулху';
   doc.getElementById('fPlace').value = 'Клуб настолок';
-  doc.getElementById('fOrganizer').value = 'Игорь';
-  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
   doc.getElementById('fMax').value = '6';
   doc.getElementById('fNote').value = 'для новичков';
   doc.getElementById('fDifficulty').value = 'Сложная';
@@ -167,17 +190,19 @@ function fireEvent(win, el, type) {
   if (copiedText !== text) throw new Error('copied text does not match textarea content');
   console.log('PASS: copy button copied exact post text to clipboard stub');
 
-  // reset and resubmit identical event -> should be rejected as duplicate
+  // reset and resubmit identical event -> should be rejected as duplicate. Identity persists
+  // across reset (it's not part of the form itself), so no need to re-identify.
   doc.getElementById('resetBtn').click();
   await waitFor(() => doc.getElementById('eventForm').hidden === false);
   if (!doc.getElementById('fCityOtherWrap').hidden) throw new Error('reset should hide the "Другой" city field again');
   if (doc.getElementById('fFormatGroup').querySelectorAll('.chip.active').length !== 0) throw new Error('reset should clear selected genre chips');
+  if (!doc.getElementById('organizerIdText').textContent.includes('igor@beeline.ru')) {
+    throw new Error('organizer identity should survive a form reset');
+  }
   doc.getElementById('fDate').value = '2026-09-15';
   doc.getElementById('fTime').value = '19:30';
   pickCity('Другой', 'Казань');
   doc.getElementById('fGame').value = 'Зов Ктулху';
-  doc.getElementById('fOrganizer').value = 'Игорь';
-  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
   submitEvent();
 
   await waitFor(() => doc.getElementById('formError').hidden === false);
@@ -193,8 +218,6 @@ function fireEvent(win, el, type) {
   pickCity('Москва');
   selectGenres('Кооперативная');
   doc.getElementById('fGame').value = 'Секретная игра организатора';
-  doc.getElementById('fOrganizer').value = 'Игорь';
-  doc.getElementById('fOrganizerEmail').value = 'igor@beeline.ru';
 
   doc.getElementById('submitScheduleBtn').click();
   await waitFor(() => doc.getElementById('resultCard').hidden === false);
@@ -222,6 +245,70 @@ function fireEvent(win, el, type) {
     throw new Error('scheduled event should be visible to its creator via email, with status Запланировано');
   }
   console.log('PASS: scheduled event is visible to its creator via ?email=');
+
+  // ---- «закрытое» мероприятие: чекбокс + список участников, введённый прямо при создании ----
+  doc.getElementById('resetBtn').click();
+  await waitFor(() => doc.getElementById('eventForm').hidden === false);
+  doc.getElementById('fDate').value = '2026-11-05';
+  doc.getElementById('fTime').value = '20:00';
+  pickCity('Москва');
+  selectGenres('Кооперативная');
+  doc.getElementById('fGame').value = 'Клуб для своих';
+
+  if (!doc.getElementById('closedWarning').hidden) throw new Error('closed-event warning should start hidden');
+  if (!doc.getElementById('fClosedParticipantsWrap').hidden) throw new Error('participants field should start hidden');
+
+  const closedCheckbox = doc.getElementById('fClosed');
+  closedCheckbox.checked = true;
+  fireEvent(window, closedCheckbox, 'change');
+  if (doc.getElementById('closedWarning').hidden) throw new Error('checking "закрытое" should reveal the warning');
+  if (doc.getElementById('fClosedParticipantsWrap').hidden) throw new Error('checking "закрытое" should reveal the participant list field');
+  console.log('PASS: checking "закрытое" reveals the warning and the participant-list field');
+
+  doc.getElementById('fClosedParticipants').value = 'Анна Егорова, anna.egorova@beeline.ru\nboris.ivanov@beeline.ru';
+  submitEvent(); // publish now -- closed events still get a normal status, just hidden from the public grid
+  await waitFor(() => doc.getElementById('resultCard').hidden === false);
+  console.log('PASS: closed event with a participant list submitted');
+
+  const rawEventsAnon = await fetch(API + '?action=events').then(r => r.json());
+  if (rawEventsAnon.events.some(e => e.game === 'Клуб для своих')) {
+    throw new Error('a closed event must not appear in the public, anonymous action=events list');
+  }
+  console.log('PASS: closed event is absent from the public, anonymous action=events list');
+
+  const rawEventsAsOrganizer = await fetch(API + '?action=events&email=igor@beeline.ru').then(r => r.json());
+  const closedEv = rawEventsAsOrganizer.events.find(e => e.game === 'Клуб для своих');
+  if (!closedEv || !closedEv.isClosed) throw new Error('closed event should be visible to its organizer, with isClosed=true');
+  console.log('PASS: closed event is visible to its organizer via ?email=, with isClosed=true');
+
+  const rawEventsAsParticipant = await fetch(API + '?action=events&email=anna.egorova@beeline.ru').then(r => r.json());
+  const closedEvForParticipant = rawEventsAsParticipant.events.find(e => e.game === 'Клуб для своих');
+  if (!closedEvForParticipant) throw new Error('closed event should be visible to a participant listed at creation time');
+  if (!rawEventsAsParticipant.registeredIds.includes(closedEvForParticipant.id)) {
+    throw new Error('a participant listed at creation should already be registered ("Отменить запись") for the closed event');
+  }
+  const participantNames = closedEvForParticipant.participants.map(p => p.name);
+  if (!participantNames.includes('Анна Егорова') || !participantNames.some(n => n.toLowerCase().includes('boris'))) {
+    throw new Error('closed event participants should include both people listed at creation, got: ' + participantNames);
+  }
+  console.log('PASS: participants listed at creation are auto-registered and can see the closed event via their own email ->', participantNames);
+
+  const rawEventsAsStranger = await fetch(API + '?action=events&email=stranger@beeline.ru').then(r => r.json());
+  if (rawEventsAsStranger.events.some(e => e.game === 'Клуб для своих')) {
+    throw new Error('closed event should stay hidden from an unrelated identified visitor');
+  }
+  console.log('PASS: closed event stays hidden from an unrelated identified visitor');
+
+  // even someone who somehow knows about the closed event cannot self-register for it --
+  // only the organizer's creation-time participant list can add people
+  const selfSignupAttempt = await fetch(API, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'signup', date: '2026-11-05', time: '20:00', game: 'Клуб для своих', name: 'Незваный Гость', email: 'uninvited@beeline.ru' })
+  }).then(r => r.json());
+  if (selfSignupAttempt.ok !== false || selfSignupAttempt.error !== 'closed') {
+    throw new Error('direct signup against a closed event should be rejected, got: ' + JSON.stringify(selfSignupAttempt));
+  }
+  console.log('PASS: self-registration on a closed event is rejected server-side too');
 
   console.log('\nALL ORGANIZER TESTS PASSED');
   process.exit(0);

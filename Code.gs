@@ -13,18 +13,20 @@
 var SHEET_EVENTS = 'Мероприятия';
 var SHEET_SIGNUPS = 'Записи';
 var SHEET_CALENDAR = 'Календарь';
+var SHEET_ACCOUNTS = 'Аккаунты';
 var TIMEZONE = 'Europe/Moscow';
 
 // Статусы, которые вообще показываются на публичном сайте
 var PUBLIC_STATUSES = ['Набор открыт', 'Набрано', 'Отменено'];
 
 // «Запланировано» -- организатор сохранил игру, но не опубликовал: по умолчанию видна
-// только ему самому (по email) или тем, кто ввёл секретное слово амбассадора ниже
+// только ему самому (по email) или амбассадорам (роль в листе «Аккаунты»)
 var SCHEDULED_STATUS = 'Запланировано';
 
-// секретное слово для входа «я-амбассадор» -- открывает видимость ВСЕХ запланированных
-// (ещё не опубликованных) мероприятий, не только своих собственных
-var AMBASSADOR_SECRET = 'я-амбассадор';
+// роль «Амбассадор» в листе «Аккаунты» открывает видимость ВСЕХ запланированных и всех
+// закрытых мероприятий -- ставится ТОЛЬКО руками в таблице, с сайта недоступно и нигде не
+// отображается
+var ROLE_AMBASSADOR = 'Амбассадор';
 
 // Тот же цветовой код, что был в исходном ручном календаре организаторов
 var STATUS_COLORS = {
@@ -47,7 +49,7 @@ function doGet(e) {
       // and a second full sheet read that the client used to need via action=myStatus
       var signups = getAllSignupStates();
       var email = normalizeEmail((e.parameter && e.parameter.email) || '');
-      var hasAmbassadorAccess = isAmbassador((e.parameter && e.parameter.secret) || '');
+      var hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
       var result = { ok: true, events: getPublicEvents(signups, email, hasAmbassadorAccess) };
       if (email) result.registeredIds = getMyRegistrations(email, signups);
       return jsonOutput(result);
@@ -85,6 +87,9 @@ function doPost(e) {
     if (action === 'createEvent') {
       return jsonOutput(handleCreateEvent(body));
     }
+    if (action === 'identify') {
+      return jsonOutput(handleIdentify(body));
+    }
     return jsonOutput({ ok: false, error: 'unknown action' });
   } catch (err) {
     return jsonOutput({ ok: false, error: String(err) });
@@ -93,10 +98,13 @@ function doPost(e) {
 
 // ---------- events ----------
 
-// viewerEmail/hasAmbassadorAccess control visibility of SCHEDULED_STATUS ("Запланировано")
-// events, which are hidden from the general public: a scheduled event is only included if
-// the caller is its creator (organizerEmail matches viewerEmail) or knows the ambassador
-// secret. Regular PUBLIC_STATUSES events are always included for everyone, as before.
+// viewerEmail/hasAmbassadorAccess control visibility of not-fully-public events:
+// - «Запланировано» (scheduled/unpublished) events are hidden from everyone except their
+//   creator (organizerEmail matches viewerEmail) or an ambassador.
+// - «Закрытое» (closed) events are hidden from the general public grid too -- visible only
+//   to the organizer, an ambassador, or someone who was actually added as a participant
+//   (their email appears among the event's active signups).
+// Regular open PUBLIC_STATUSES events (not closed) are always included for everyone.
 function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   var values = sheet.getDataRange().getValues();
@@ -123,20 +131,34 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
     var setting = row[14];
     var imageUrl = row[15];
     var organizerEmail = normalizeEmail(row[16] || '');
+    var isClosed = isClosedVal(row[17]);
 
     if (!date || !game) continue;
-
-    var isPublic = PUBLIC_STATUSES.indexOf(status) !== -1;
-    var isScheduled = status === SCHEDULED_STATUS;
-    var isVisibleToViewer = isScheduled && ((viewerEmail && organizerEmail && viewerEmail === organizerEmail) || hasAmbassadorAccess);
-    if (!isPublic && !isVisibleToViewer) continue;
 
     var dateStr = formatDate(date);
     var key = eventKey(dateStr, time, game);
     var active = (signups[key] || []).filter(function (p) { return p.status === 'Записан'; });
+
+    var isPublicStatus = PUBLIC_STATUSES.indexOf(status) !== -1;
+    var isScheduled = status === SCHEDULED_STATUS;
+    var isOrganizerOrAmbassador = (viewerEmail && organizerEmail && viewerEmail === organizerEmail) || hasAmbassadorAccess;
+    var isParticipant = !!viewerEmail && active.some(function (p) { return p.email === viewerEmail; });
+
+    var visible;
+    if (isScheduled) {
+      visible = isOrganizerOrAmbassador;
+    } else if (isPublicStatus && isClosed) {
+      visible = isOrganizerOrAmbassador || isParticipant;
+    } else if (isPublicStatus) {
+      visible = true;
+    } else {
+      visible = false;
+    }
+    if (!visible) continue;
+
     var participantsCount = headcountOf(active); // считает и гостей (+1/+2/...), не только строки записи
     var isFull = maxParticipants ? participantsCount >= Number(maxParticipants) : false;
-    var isOpen = status === 'Набор открыт' && !isFull;
+    var isOpen = status === 'Набор открыт' && !isFull && !isClosed;
     var interested = (signups[key] || []).filter(function (p) { return p.status === 'Интересуюсь'; });
 
     events.push({
@@ -151,6 +173,7 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
       organizerEmail: organizerEmail || '',
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       status: status,
+      isClosed: isClosed,
       note: note || '',
       difficulty: difficulty || '',
       maxDuration: maxDuration ? Number(maxDuration) : null,
@@ -196,6 +219,9 @@ function handleSignup(body) {
   var eventInfo = findEvent(date, time, game);
   if (!eventInfo) return { ok: false, error: 'event not found' };
   if (eventInfo.status === 'Отменено') return { ok: false, error: 'event cancelled' };
+  // «закрытое» мероприятие -- самостоятельная запись на сайте недоступна, участников
+  // вносит только организатор (списком при создании)
+  if (eventInfo.isClosed) return { ok: false, error: 'closed' };
 
   var signups = getAllSignupStates();
   var key = eventKey(date, time, game);
@@ -239,6 +265,9 @@ function handleInterest(body) {
   var email = normalizeEmail(body.email || '');
   if (!date || !game || !name || !email) return { ok: false, error: 'missing fields' };
 
+  var eventInfo = findEvent(date, time, game);
+  if (eventInfo && eventInfo.isClosed) return { ok: false, error: 'closed' };
+
   var key = eventKey(date, time, game);
   var signups = getAllSignupStates();
   var mine = (signups[key] || []).filter(function (p) { return p.email === email; })[0];
@@ -273,6 +302,9 @@ function handleCreateEvent(body) {
   // publishNow defaults to true (backward compatible) -- explicit false means "Запланировать":
   // save privately, visible only to this organizer (and ambassadors) until they publish it
   var status = body.publishNow === false ? SCHEDULED_STATUS : 'Набор открыт';
+  // «закрытое» мероприятие -- запись только через организатора: участники перечисляются
+  // списком прямо при создании (ниже), самостоятельно записаться на сайте нельзя
+  var isClosed = !!body.isClosed;
 
   if (!date || !game || !city || !organizer || !organizerEmail) {
     return { ok: false, error: 'missing fields' };
@@ -306,23 +338,35 @@ function handleCreateEvent(body) {
     bggUrl,
     setting,
     imageUrl,
-    organizerEmail
+    organizerEmail,
+    isClosed
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
   sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
 
+  // закрытое мероприятие: участников (по почте) добавляем сразу как обычные записи
+  // (статус «Записан»), минуя проверки вместимости/дублей -- их вносит организатор
+  if (isClosed && Array.isArray(body.closedParticipants)) {
+    body.closedParticipants.forEach(function (p) {
+      var pEmail = normalizeEmail((p && p.email) || '');
+      if (!pEmail) return;
+      var pName = capitalizeFirst((p && p.name) || pEmail.split('@')[0]);
+      appendSignupRow(date, time, game, pName, pEmail, 'Записан', 0);
+    });
+  }
+
   return { ok: true, id: eventKey(date, time, game), status: status };
 }
 
-// организатор (по email) или амбассадор (по секретному слову) переводит своё
+// организатор (по email) или амбассадор (роль в «Аккаунты») переводит своё
 // запланированное мероприятие в «Набор открыт», делая его видимым всем
 function handlePublish(body) {
   var date = body.date, time = body.time, game = body.game;
   if (!date || !game) return { ok: false, error: 'missing fields' };
 
   var email = normalizeEmail(body.email || '');
-  var hasAmbassadorAccess = isAmbassador(body.secret || '');
+  var hasAmbassadorAccess = email ? isAmbassadorEmail(email) : false;
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   var values = sheet.getDataRange().getValues();
@@ -387,7 +431,8 @@ function findEvent(date, time, game) {
     if (formatDate(row[0]) === date && formatTimeVal(row[1]) === String(time || '') && row[4] === game) {
       return {
         maxParticipants: row[7] ? Number(row[7]) : null,
-        status: row[8]
+        status: row[8],
+        isClosed: isClosedVal(row[17])
       };
     }
   }
@@ -470,15 +515,73 @@ function capitalizeFirst(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function normalizeSecret(s) {
-  return String(s || '').trim().toLowerCase();
+// checkbox-колонка «Закрытое» обычно приходит настоящим boolean из getValues(), но
+// принимаем и текстовые варианты на случай, если кто-то впишет значение руками
+function isClosedVal(v) {
+  if (v === true) return true;
+  return /^(true|да|yes|1)$/i.test(String(v || '').trim());
 }
 
-// секретное слово «я-амбассадор» открывает видимость всех запланированных мероприятий,
-// не только своих собственных -- сравнение без учёта регистра/пробелов по краям
-function isAmbassador(secret) {
-  var s = normalizeSecret(secret);
-  return !!s && s === normalizeSecret(AMBASSADOR_SECRET);
+// ---------- аккаунты (лист «Аккаунты»): email + 4-значный код + роль ----------
+//
+// Роль ("Участник"/"Амбассадор") можно поставить ТОЛЬКО вручную в самой таблице -- ни один
+// запрос с сайта не может её выставить или прочитать напрямую. Единственное, что сайт
+// умеет -- это спросить "какая роль у email X", чтобы решить, показывать ли этому
+// человеку все запланированные/закрытые мероприятия.
+
+function findAccountRow(sheet, email) {
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    if (normalizeEmail(values[r][0] || '') === email) return r + 1; // 1-based sheet row
+  }
+  return -1;
+}
+
+function getAccountRole(email) {
+  email = normalizeEmail(email || '');
+  if (!email) return '';
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ACCOUNTS);
+  if (!sheet) return '';
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    if (normalizeEmail(values[r][0] || '') === email) return String(values[r][3] || '').trim();
+  }
+  return '';
+}
+
+function isAmbassadorEmail(email) {
+  return getAccountRole(email) === ROLE_AMBASSADOR;
+}
+
+// первый вход с почты -- человек сам придумывает 4-значный код, он закрепляется за
+// почтой. Повторный вход с той же почты (даже под другим именем) требует этот же код;
+// если код не совпал, отправляем к амбассадору Дарье, чтобы сбросила вручную в таблице.
+function handleIdentify(body) {
+  var name = capitalizeFirst(String(body.name || '').trim());
+  var email = normalizeEmail(body.email || '');
+  var pin = String(body.pin || '').trim();
+
+  if (!name || !email) return { ok: false, error: 'missing_fields' };
+  if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'invalid_pin' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ACCOUNTS);
+  var rowIndex = findAccountRow(sheet, email);
+
+  if (rowIndex === -1) {
+    sheet.appendRow([email, name, pin, 'Участник', new Date()]);
+    // PIN должен остаться текстом -- иначе код вида "0512" потеряет ведущий ноль
+    sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@');
+    return { ok: true, isNew: true };
+  }
+
+  var storedPin = String(sheet.getRange(rowIndex, 3).getValue() || '').trim();
+  if (storedPin !== pin) return { ok: false, error: 'wrong_pin' };
+
+  // код верный -- заодно обновим отображаемое имя, если оно поменялось
+  var storedName = sheet.getRange(rowIndex, 2).getValue();
+  if (storedName !== name) sheet.getRange(rowIndex, 2).setValue(name);
+
+  return { ok: true, isNew: false };
 }
 
 function jsonOutput(obj) {
@@ -578,6 +681,7 @@ function formatCalendarEventLine(ev) {
   var parts = [];
   if (ev.time) parts.push(ev.time);
   parts.push(ev.game);
+  if (ev.isClosed) parts.push('[закрытое]');
   if (ev.place) parts.push('(' + ev.place + ')');
   if (ev.organizer) parts.push('· ' + ev.organizer);
   return parts.join(' ');
@@ -592,10 +696,11 @@ function groupEventsByDate() {
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     var date = row[0], time = formatTimeVal(row[1]), game = row[4], place = row[5], organizer = row[6], status = row[8];
+    var isClosed = isClosedVal(row[17]);
     if (!date || !game) continue;
     var dateStr = formatDate(date);
     if (!map[dateStr]) map[dateStr] = [];
-    map[dateStr].push({ time: time, game: game, place: place, organizer: organizer, status: status });
+    map[dateStr].push({ time: time, game: game, place: place, organizer: organizer, status: status, isClosed: isClosed });
   }
   return map;
 }

@@ -8,24 +8,36 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 
 // ---- fixture data, matching the exact column order of the real sheets ----
 // Мероприятия: Дата, Время, Город, Жанр, Игра, Место, Организатор, Макс.участников, Статус, Комментарий,
-//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора
+//              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора, Закрытое
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru'],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru'],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru'],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru'], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru'],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false],
   // scheduled/unpublished -- only visible to its creator (olya@beeline.ru) or an ambassador,
   // not in the general public list
-  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru'],
+  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false],
+  // closed/private: publicly-statused but hidden from the general grid -- visible only to
+  // its organizer, ambassadors, or its (creation-time) participants
+  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
 let signupRows = [
   ['Timestamp','Дата','Время','Игра','Имя','Корп. почта','Статус','Гости'],
+  // pre-added participant of the closed fixture event, as if the organizer had listed them
+  // at creation time (bypassing handleSignup entirely, same as handleCreateEvent does)
+  [new Date(), '2026-10-10', '19:00', 'Приватная встреча', 'Костя', 'kostya@beeline.ru', 'Записан', 0],
+];
+
+// Аккаунты: Email, Имя, PIN, Роль, Дата регистрации -- роль ставится ТОЛЬКО вручную сюда,
+// никогда через doGet/doPost
+let accountRows = [
+  ['Email', 'Имя', 'PIN', 'Роль', 'Дата регистрации'],
 ];
 
 function makeSheetStub(rows) {
@@ -42,7 +54,8 @@ function makeSheetStub(rows) {
     getRange(r, c) {
       return {
         setNumberFormat(fmt) { this._fmt = fmt; return this; },
-        setValue(v) { rows[r - 1][c - 1] = v; return this; }
+        setValue(v) { rows[r - 1][c - 1] = v; return this; },
+        getValue() { return rows[r - 1][c - 1]; }
       };
     }
   };
@@ -56,6 +69,7 @@ const sandbox = {
         getSheetByName(name) {
           if (name === 'Мероприятия') return makeSheetStub(eventsRows);
           if (name === 'Записи') return makeSheetStub(signupRows);
+          if (name === 'Аккаунты') return makeSheetStub(accountRows);
           throw new Error('unknown sheet ' + name);
         }
       };
@@ -151,6 +165,7 @@ function check(label, cond) {
 const r1 = callDoGet({ action: 'events' });
 check('doGet events ok', r1.ok === true);
 check('draft (Черновик) hidden from public list', !r1.events.some(e => e.game === 'Нечто'));
+check('closed event (Приватная встреча) hidden from anonymous public list', !r1.events.some(e => e.game === 'Приватная встреча'));
 check('4 public events returned', r1.events.length === 4);
 
 const timeBug = r1.events.find(e => e.game === 'Тест Время-Баг');
@@ -237,6 +252,9 @@ check('already-registered participant stays registered after a no-op interest ca
 const iMissing = callDoPost({ action: 'interest', date: '2026-08-07', time: '18:00', game: 'Таверна Красный дракон', email: 'noname@beeline.ru' });
 check('interest missing name rejected', iMissing.ok === false && iMissing.error === 'missing fields');
 
+const iClosed = callDoPost({ action: 'interest', date: '2026-10-10', time: '19:00', game: 'Приватная встреча', name: 'Любопытный', email: 'curious@beeline.ru' });
+check('interest on a closed event rejected', iClosed.ok === false && iClosed.error === 'closed');
+
 // myStatus
 const my2 = callDoGet({ action: 'myStatus', email: 'p2@beeline.ru' });
 check('myStatus for p2 includes the dracon event', my2.ok && my2.registered.includes('2026-08-07|18:00|Таверна Красный дракон'));
@@ -291,6 +309,7 @@ check('createEvent wrote difficulty/maxDuration/tesera/bgg into columns K-N',
 check('createEvent wrote setting into column O', newRow[14] === 'космос, экономика');
 check('createEvent wrote imageUrl into column P', newRow[15] === 'https://example.com/mars.jpg');
 check('createEvent wrote organizerEmail into column Q', newRow[16] === 'olya@beeline.ru');
+check('createEvent defaults isClosed to false in column R', newRow[17] === false);
 
 // ---- BGG cover auto-fetch ----
 // no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
@@ -386,36 +405,75 @@ check('participant name comes back capitalized', lowerNameEv.participants[0].nam
 const draconAgain = rLower.events.find(e => e.game === 'Таверна Красный дракон');
 check('multi-value «Жанр» round-trips as a comma-separated string', draconAgain.format === 'Стратегия, Евро');
 
-// ---- «Запланировано»: видно только создателю (по email) или амбассадору ----
+// ---- «Аккаунты»: identify (email + 4-значный PIN) ----
+const id1 = callDoPost({ action: 'identify', name: 'Игрок Один', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify: brand-new email creates the account', id1.ok === true && id1.isNew === true);
+
+const id2 = callDoPost({ action: 'identify', name: 'Игрок Один', email: 'newacc@beeline.ru', pin: '0000' });
+check('identify: wrong PIN on a known email is rejected', id2.ok === false && id2.error === 'wrong_pin');
+
+const id3 = callDoPost({ action: 'identify', name: 'Игрок Один', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify: correct PIN on a known email succeeds', id3.ok === true && id3.isNew === false);
+
+const id4 = callDoPost({ action: 'identify', name: 'Игрок Один', email: 'newacc@beeline.ru', pin: '12' });
+check('identify: PIN must be exactly 4 digits', id4.ok === false && id4.error === 'invalid_pin');
+
+const id5 = callDoPost({ action: 'identify', name: '', email: 'noname@beeline.ru', pin: '1234' });
+check('identify: missing name rejected', id5.ok === false && id5.error === 'missing_fields');
+
+const idRename = callDoPost({ action: 'identify', name: 'Новое Имя', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify with the correct PIN updates the stored display name', idRename.ok === true);
+const renamedRow = accountRows.find(r => r[0] === 'newacc@beeline.ru');
+check('account row name updated in «Аккаунты»', renamedRow && renamedRow[1] === 'Новое Имя');
+
+// a PIN with a leading zero must round-trip exactly (stored as text, not a number)
+const idZero = callDoPost({ action: 'identify', name: 'Ноль Ноль', email: 'zeropin@beeline.ru', pin: '0512' });
+check('identify: PIN with a leading zero accepted', idZero.ok === true);
+const zeroRow = accountRows.find(r => r[0] === 'zeropin@beeline.ru');
+check('leading-zero PIN preserved as a 4-character string', zeroRow && String(zeroRow[2]) === '0512');
+const idZeroCheck = callDoPost({ action: 'identify', name: 'Ноль Ноль', email: 'zeropin@beeline.ru', pin: '0512' });
+check('leading-zero PIN can be used again to log back in', idZeroCheck.ok === true);
+
+// ---- «Запланировано»: видно только создателю (по email) или амбассадору (роль в «Аккаунты») ----
 const rNoAccess = callDoGet({ action: 'events' });
-check('scheduled event hidden with no email/secret', !rNoAccess.events.some(e => e.game === 'Секретный проект'));
+check('scheduled event hidden with no email', !rNoAccess.events.some(e => e.game === 'Секретный проект'));
 
 const rWrongEmail = callDoGet({ action: 'events', email: 'someone-else@beeline.ru' });
-check('scheduled event hidden from a different email', !rWrongEmail.events.some(e => e.game === 'Секретный проект'));
+check('scheduled event hidden from a different, non-ambassador email', !rWrongEmail.events.some(e => e.game === 'Секретный проект'));
 
 const rCreatorEmail = callDoGet({ action: 'events', email: 'olya@beeline.ru' });
 const secretEvForCreator = rCreatorEmail.events.find(e => e.game === 'Секретный проект');
 check('scheduled event visible to its creator by email', secretEvForCreator && secretEvForCreator.status === 'Запланировано');
 
-const rAmbassador = callDoGet({ action: 'events', secret: 'Я-Амбассадор' }); // case-insensitive
-check('scheduled event visible with the ambassador secret (case-insensitive)',
-  rAmbassador.events.some(e => e.game === 'Секретный проект'));
+// роль «Амбассадор» ставится ТОЛЬКО вручную в самой таблице -- симулируем это, просто
+// дописав строку в лист «Аккаунты» напрямую (ни один запрос с сайта так не может)
+accountRows.push(['ambassador@beeline.ru', 'Амбассадор Тестов', '0000', 'Амбассадор', new Date()]);
 
-// публикация: не создатель и без секрета -- запрещено, событие остаётся запланированным
+const rAmbassador = callDoGet({ action: 'events', email: 'ambassador@beeline.ru' });
+check('scheduled event visible to an account with the Амбассадор role', rAmbassador.events.some(e => e.game === 'Секретный проект'));
+check('closed event also visible to an account with the Амбассадор role', rAmbassador.events.some(e => e.game === 'Приватная встреча'));
+
+// a plain "Участник" role must NOT grant ambassador-level access
+accountRows.push(['participant-role@beeline.ru', 'Обычный Участник', '1111', 'Участник', new Date()]);
+const rParticipantRole = callDoGet({ action: 'events', email: 'participant-role@beeline.ru' });
+check('an explicit "Участник" role does not reveal the scheduled event', !rParticipantRole.events.some(e => e.game === 'Секретный проект'));
+check('an explicit "Участник" role does not reveal the closed event', !rParticipantRole.events.some(e => e.game === 'Приватная встреча'));
+
+// публикация: не создатель и не амбассадор -- запрещено
 const pForbidden = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', email: 'someone-else@beeline.ru' });
-check('publish forbidden for a non-creator without the ambassador secret', pForbidden.ok === false && pForbidden.error === 'forbidden');
+check('publish forbidden for a non-creator, non-ambassador', pForbidden.ok === false && pForbidden.error === 'forbidden');
 const rStillScheduled = callDoGet({ action: 'events', email: 'olya@beeline.ru' });
 check('event still Запланировано after a forbidden publish attempt',
   rStillScheduled.events.find(e => e.game === 'Секретный проект').status === 'Запланировано');
 
-// публикация через секрет амбассадора -- разрешена, даже не будучи создателем
-const pAmbassador = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', secret: 'я-амбассадор' });
-check('ambassador can publish someone else\'s scheduled event', pAmbassador.ok === true);
+// публикация амбассадором -- разрешена, даже не будучи создателем
+const pAmbassador = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', email: 'ambassador@beeline.ru' });
+check('an ambassador can publish someone else\'s scheduled event', pAmbassador.ok === true);
 const rPublished = callDoGet({ action: 'events' });
 check('event is now publicly visible after being published', rPublished.events.some(e => e.game === 'Секретный проект' && e.status === 'Набор открыт'));
 
 // публикация уже опубликованного события -- отклоняется
-const pAlreadyPublished = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', secret: 'я-амбассадор' });
+const pAlreadyPublished = callDoPost({ action: 'publish', date: '2026-10-01', time: '19:00', game: 'Секретный проект', email: 'ambassador@beeline.ru' });
 check('publishing an already-published event is rejected', pAlreadyPublished.ok === false && pAlreadyPublished.error === 'not scheduled');
 
 // ---- «Запланировать» через createEvent (publishNow:false), затем публикация создателем ----
@@ -431,9 +489,49 @@ const rOwnScheduled = callDoGet({ action: 'events', email: 'zhenya@beeline.ru' }
 check('freshly scheduled event visible to its own creator', rOwnScheduled.events.some(e => e.game === 'Новая скрытая игра'));
 
 const pByCreator = callDoPost({ action: 'publish', date: '2026-10-05', time: '20:00', game: 'Новая скрытая игра', email: 'zhenya@beeline.ru' });
-check('creator can publish their own scheduled event (no secret needed)', pByCreator.ok === true);
+check('creator can publish their own scheduled event (no ambassador role needed)', pByCreator.ok === true);
 const rNowPublic = callDoGet({ action: 'events' });
 check('event is publicly visible after the creator publishes it', rNowPublic.events.some(e => e.game === 'Новая скрытая игра' && e.status === 'Набор открыт'));
+
+// ---- «закрытое»: preset fixture visibility + createEvent with a creation-time participant list ----
+const rClosedStranger = callDoGet({ action: 'events', email: 'stranger@beeline.ru' });
+check('preset closed event hidden from an unrelated identified visitor', !rClosedStranger.events.some(e => e.game === 'Приватная встреча'));
+
+const rClosedOrganizer = callDoGet({ action: 'events', email: 'nastya2@beeline.ru' });
+const closedEvForOrganizer = rClosedOrganizer.events.find(e => e.game === 'Приватная встреча');
+check('preset closed event visible to its organizer, isClosed=true', closedEvForOrganizer && closedEvForOrganizer.isClosed === true);
+
+const rClosedParticipant = callDoGet({ action: 'events', email: 'kostya@beeline.ru' });
+const closedEvForParticipant = rClosedParticipant.events.find(e => e.game === 'Приватная встреча');
+check('preset closed event visible to its (creation-time) participant', !!closedEvForParticipant);
+check('participant is bundled into registeredIds for the closed event', closedEvForParticipant && rClosedParticipant.registeredIds.includes(closedEvForParticipant.id));
+
+// direct self-signup against a closed event must be rejected server-side, not just hidden in the UI
+const sClosedDirect = callDoPost({ action: 'signup', date: '2026-10-10', time: '19:00', game: 'Приватная встреча', name: 'Незваный', email: 'uninvited@beeline.ru' });
+check('direct signup against a closed event is rejected', sClosedDirect.ok === false && sClosedDirect.error === 'closed');
+
+// createEvent with isClosed + closedParticipants: participants get auto-registered
+const ceClosed = callDoPost({
+  action: 'createEvent', date: '2026-11-01', time: '18:00', city: 'Москва', format: 'Карточная',
+  game: 'Клуб по интересам', place: '', organizer: 'Настя', organizerEmail: 'nastya2@beeline.ru',
+  maxParticipants: null, note: '', isClosed: true,
+  closedParticipants: [{ name: 'Дима Волков', email: 'dima.volkov@beeline.ru' }, { email: 'noname.participant@beeline.ru' }]
+});
+check('createEvent with isClosed+closedParticipants ok', ceClosed.ok === true);
+const closedRow = eventsRows[eventsRows.length - 1];
+check('createEvent wrote isClosed=true into column R', closedRow[17] === true);
+
+const rNewClosedAnon = callDoGet({ action: 'events' });
+check('newly created closed event hidden from anonymous visitors', !rNewClosedAnon.events.some(e => e.game === 'Клуб по интересам'));
+
+const rNewClosedParticipant = callDoGet({ action: 'events', email: 'dima.volkov@beeline.ru' });
+const newClosedEvForParticipant = rNewClosedParticipant.events.find(e => e.game === 'Клуб по интересам');
+check('a participant listed at creation time is auto-registered and can see the closed event', !!newClosedEvForParticipant);
+check('participant name capitalized from the closedParticipants list', newClosedEvForParticipant && newClosedEvForParticipant.participants.some(p => p.name === 'Дима Волков'));
+
+const rNewClosedNoName = callDoGet({ action: 'events', email: 'noname.participant@beeline.ru' });
+const newClosedEvForNoNameParticipant = rNewClosedNoName.events.find(e => e.game === 'Клуб по интересам');
+check('a participant listed with only an email still gets registered, name derived from the email', !!newClosedEvForNoNameParticipant);
 
 // ---- organizer deletes an event row directly in Google Sheets ----
 // (do this last -- it removes "Таверна Красный дракон" from the fixture, which earlier

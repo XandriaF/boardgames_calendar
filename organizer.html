@@ -26,6 +26,10 @@
 
   <form class="card form-card" id="eventForm">
     <div class="form-grid">
+      <label class="field field-wide">
+        <span>Игра *</span>
+        <input type="text" id="fGame" placeholder="Каркассон" required>
+      </label>
       <label class="field">
         <span>Дата *</span>
         <input type="date" id="fDate" required>
@@ -48,23 +52,17 @@
         <span>Жанр (можно несколько)</span>
         <div class="pillrow" id="fFormatGroup"></div>
       </div>
-      <label class="field field-wide">
-        <span>Игра *</span>
-        <input type="text" id="fGame" placeholder="Каркассон" required>
-      </label>
       <label class="field">
         <span>Место</span>
         <input type="text" id="fPlace" placeholder="Клубик">
       </label>
-      <label class="field">
-        <span>Организатор *</span>
-        <input type="text" id="fOrganizer" placeholder="Даша Иванова" required>
-      </label>
-      <label class="field">
-        <span>Email организатора *</span>
-        <input type="email" id="fOrganizerEmail" placeholder="ivan.ivanov@beeline.ru" required>
-        <span class="field-hint">Нужен, чтобы вы могли позже опубликовать запланированную игру и чтобы участники видели, как с вами связаться</span>
-      </label>
+      <div class="field field-wide organizer-id-row">
+        <div>
+          <span>Организатор</span>
+          <p class="field-hint" id="organizerIdText"></p>
+        </div>
+        <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+      </div>
       <label class="field">
         <span>Макс. участников</span>
         <input type="number" id="fMax" min="1" placeholder="без ограничений">
@@ -106,6 +104,18 @@
         <span>Комментарий / ссылка</span>
         <input type="text" id="fNote" placeholder="необязательно">
       </label>
+      <div class="field field-wide">
+        <label class="field-checkbox">
+          <input type="checkbox" id="fClosed">
+          <span>Закрытое мероприятие (запись только через организатора)</span>
+        </label>
+        <p class="field-warning" id="closedWarning" hidden>Другие пользователи не смогут сами записаться на это мероприятие — только вы можете добавить участников, перечислив их почты ниже, при создании. Добавить кого-то ещё позже можно будет только вручную в таблице.</p>
+      </div>
+      <label class="field field-wide" id="fClosedParticipantsWrap" hidden>
+        <span>Участники закрытого мероприятия</span>
+        <textarea id="fClosedParticipants" rows="4" placeholder="Иван Иванов, ivan.ivanov@beeline.ru"></textarea>
+        <span class="field-hint">По одному участнику на строку: имя, запятая, корпоративная почта</span>
+      </label>
     </div>
     <div class="result-actions">
       <button class="btn-primary" id="submitNowBtn" type="submit">Опубликовать сейчас</button>
@@ -126,6 +136,30 @@
     <p class="cap mut3" id="copyHint" style="margin-top:10px"></p>
   </section>
 
+</div>
+
+<!-- Модалка: это вы? (имя+почта+код) -->
+<div class="modal-overlay" id="whoAmIOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" data-close>×</button>
+    <h3>Это вы?</h3>
+    <p class="modal-hint">Укажите, кто анонсирует игру. Почта и код нужны, чтобы никто другой не мог опубликовать или изменить мероприятие от вашего имени.</p>
+    <label class="field">
+      <span>Имя</span>
+      <input type="text" id="inputName" placeholder="Даша Иванова" autocomplete="name">
+    </label>
+    <label class="field">
+      <span>Корпоративная почта</span>
+      <input type="email" id="inputEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
+    </label>
+    <label class="field">
+      <span>Код (4 цифры)</span>
+      <input type="text" id="inputPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <span class="field-hint">Заходите с этой почтой впервые — просто придумайте код, он закрепится за вами. Почта уже знакома сайту — введите тот же код, что и в прошлый раз.</span>
+    </label>
+    <button class="btn-primary" id="saveWhoAmI" type="button">Сохранить</button>
+    <p class="modal-error" id="whoAmIError" hidden></p>
+  </div>
 </div>
 
 <script src="config.js"></script>

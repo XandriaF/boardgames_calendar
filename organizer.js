@@ -94,10 +94,28 @@
   function getMe() {
     try { return JSON.parse(localStorage.getItem('nastolki_me') || 'null'); } catch (e) { return null; }
   }
-  // keeps the "это вы" identity on index.html in sync with who just announced a game --
-  // needed so a scheduled (unpublished) event is recognized as "mine" there automatically
+  // keeps the "это вы" identity in sync with index.html -- needed so a scheduled
+  // (unpublished) event is recognized as "mine" there automatically
   function setMe(me) {
     localStorage.setItem('nastolki_me', JSON.stringify(me));
+  }
+
+  function showOverlay(id) { document.getElementById(id).hidden = false; }
+  function hideOverlay(id) { document.getElementById(id).hidden = true; }
+
+  // организатор/email больше не свободные поля формы -- это уже подтверждённая (PIN'ом)
+  // личность из "это вы"; показываем её здесь же, чтобы её было видно и можно было сменить
+  function renderWhoAmI() {
+    var me = getMe();
+    var textEl = document.getElementById('organizerIdText');
+    var btn = document.getElementById('whoAmIBtn');
+    if (me && me.name && me.email) {
+      textEl.textContent = me.name + ' · ' + me.email;
+      btn.textContent = 'изменить';
+    } else {
+      textEl.textContent = 'Ещё не указано — нажмите «это вы», чтобы участники видели, как с вами связаться';
+      btn.textContent = 'это вы';
+    }
   }
 
   function buildPostText(ev, link) {
@@ -136,9 +154,30 @@
 
   var form = document.getElementById('eventForm');
 
+  // одна строка = один участник закрытого мероприятия: "Имя, почта". Без запятой вся
+  // строка считается почтой, а имя достаётся из её локальной части (до @)
+  function parseClosedParticipants() {
+    var raw = document.getElementById('fClosedParticipants').value || '';
+    return raw.split('\n').map(function (line) {
+      line = line.trim();
+      if (!line) return null;
+      var idx = line.indexOf(',');
+      var name, email;
+      if (idx === -1) {
+        email = line;
+        name = email.split('@')[0];
+      } else {
+        name = line.slice(0, idx).trim();
+        email = line.slice(idx + 1).trim();
+      }
+      return { name: name, email: email };
+    }).filter(Boolean);
+  }
+
   function collectFormValues() {
     var cityRaw = document.getElementById('fCity').value;
     var city = cityRaw === 'Другой' ? document.getElementById('fCityOther').value.trim() : cityRaw;
+    var me = getMe();
     return {
       date: document.getElementById('fDate').value,
       time: document.getElementById('fTime').value,
@@ -146,8 +185,8 @@
       format: selectedGenres.join(', '),
       game: document.getElementById('fGame').value.trim(),
       place: document.getElementById('fPlace').value.trim(),
-      organizer: document.getElementById('fOrganizer').value.trim() || (getMe() && getMe().name) || '',
-      organizerEmail: document.getElementById('fOrganizerEmail').value.trim() || (getMe() && getMe().email) || '',
+      organizer: (me && me.name) || '',
+      organizerEmail: (me && me.email) || '',
       maxParticipants: document.getElementById('fMax').value ? Number(document.getElementById('fMax').value) : null,
       difficulty: document.getElementById('fDifficulty').value,
       maxDuration: document.getElementById('fMaxDuration').value ? Number(document.getElementById('fMaxDuration').value) : null,
@@ -155,7 +194,9 @@
       imageUrl: document.getElementById('fImage').value.trim(),
       teseraUrl: document.getElementById('fTesera').value.trim(),
       bggUrl: document.getElementById('fBgg').value.trim(),
-      note: document.getElementById('fNote').value.trim()
+      note: document.getElementById('fNote').value.trim(),
+      isClosed: document.getElementById('fClosed').checked,
+      closedParticipants: parseClosedParticipants()
     };
   }
 
@@ -163,8 +204,12 @@
     hideFormError();
     var ev = collectFormValues();
 
-    if (!ev.date || !ev.city || !ev.game || !ev.organizer || !ev.organizerEmail.includes('@')) {
-      showFormError('Заполните дату, город, игру, организатора и его корпоративную почту');
+    if (!ev.organizer || !ev.organizerEmail) {
+      showFormError('Сначала укажите, кто вы — кнопка «это вы» рядом с полем «Организатор»');
+      return;
+    }
+    if (!ev.date || !ev.city || !ev.game) {
+      showFormError('Заполните дату, город и игру');
       return;
     }
 
@@ -182,7 +227,8 @@
       place: ev.place, organizer: ev.organizer, organizerEmail: ev.organizerEmail,
       maxParticipants: ev.maxParticipants, note: ev.note,
       difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
-      imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl
+      imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl,
+      isClosed: ev.isClosed, closedParticipants: ev.closedParticipants
     }).then(function (res) {
       nowBtn.disabled = false;
       scheduleBtn.disabled = false;
@@ -196,8 +242,6 @@
         }
         return;
       }
-
-      setMe({ name: ev.organizer, email: ev.organizerEmail });
 
       document.getElementById('resultCard').hidden = false;
       document.getElementById('copyHint').textContent = '';
@@ -260,11 +304,84 @@
     document.getElementById('resultCard').hidden = true;
     document.getElementById('formStatus').hidden = true;
     document.getElementById('fCityOtherWrap').hidden = true;
+    document.getElementById('closedWarning').hidden = true;
+    document.getElementById('fClosedParticipantsWrap').hidden = true;
     selectedGenres = [];
-    var me = getMe();
-    document.getElementById('fOrganizer').value = (me && me.name) || '';
-    document.getElementById('fOrganizerEmail').value = (me && me.email) || '';
+    renderWhoAmI();
     loadSuggestions();
+  });
+
+  document.getElementById('fClosed').addEventListener('change', function () {
+    document.getElementById('closedWarning').hidden = !this.checked;
+    document.getElementById('fClosedParticipantsWrap').hidden = !this.checked;
+  });
+
+  // ---------- "это вы" (имя+почта+код) ----------
+  document.querySelectorAll('[data-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () { hideOverlay('whoAmIOverlay'); });
+  });
+  document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) overlay.hidden = true;
+    });
+  });
+
+  document.getElementById('whoAmIBtn').addEventListener('click', function () {
+    var me = getMe();
+    document.getElementById('inputName').value = (me && me.name) || '';
+    document.getElementById('inputEmail').value = (me && me.email) || '';
+    document.getElementById('inputPin').value = '';
+    document.getElementById('whoAmIError').hidden = true;
+    showOverlay('whoAmIOverlay');
+  });
+
+  document.getElementById('saveWhoAmI').addEventListener('click', function () {
+    var name = document.getElementById('inputName').value.trim();
+    var email = document.getElementById('inputEmail').value.trim();
+    var pin = document.getElementById('inputPin').value.trim();
+    var errEl = document.getElementById('whoAmIError');
+    errEl.hidden = true;
+
+    if (!name || !email.includes('@')) {
+      errEl.textContent = 'Укажите имя и корпоративную почту';
+      errEl.hidden = false;
+      return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      errEl.textContent = 'Код должен состоять из 4 цифр';
+      errEl.hidden = false;
+      return;
+    }
+
+    var btn = document.getElementById('saveWhoAmI');
+    btn.disabled = true;
+    btn.textContent = 'Проверяем…';
+
+    apiPost({ action: 'identify', name: name, email: email, pin: pin })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.textContent = 'Сохранить';
+        if (!res.ok) {
+          if (res.error === 'wrong_pin') {
+            errEl.textContent = 'Неверный код для этой почты. Если не помните его — напишите амбассадору Дарье: ddkolesnik@beeline.ru';
+          } else if (res.error === 'invalid_pin') {
+            errEl.textContent = 'Код должен состоять из 4 цифр';
+          } else {
+            errEl.textContent = 'Не получилось сохранить, попробуйте ещё раз';
+          }
+          errEl.hidden = false;
+          return;
+        }
+        setMe({ name: name, email: email });
+        hideOverlay('whoAmIOverlay');
+        renderWhoAmI();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Сохранить';
+        errEl.textContent = 'Ошибка сети, попробуйте ещё раз';
+        errEl.hidden = false;
+      });
   });
 
   // ---------- init ----------
@@ -273,9 +390,7 @@
     document.getElementById('submitNowBtn').disabled = true;
     document.getElementById('submitScheduleBtn').disabled = true;
   } else {
-    var me = getMe();
-    if (me && me.name) document.getElementById('fOrganizer').value = me.name;
-    if (me && me.email) document.getElementById('fOrganizerEmail').value = me.email;
+    renderWhoAmI();
     loadSuggestions();
   }
 })();

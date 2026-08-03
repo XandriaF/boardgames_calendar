@@ -67,24 +67,6 @@
     localStorage.setItem('nastolki_me', JSON.stringify(me));
   }
 
-  // ---------- "я — амбассадор" secret ----------
-  // no real auth on this site (trust-based, same as everything else) -- whatever is saved
-  // here just gets sent along with every events request; the server decides whether it
-  // matches and quietly includes (or doesn't) everyone's scheduled/unpublished events
-  function getAmbassadorSecret() {
-    return localStorage.getItem('nastolki_ambassador_secret') || '';
-  }
-  function setAmbassadorSecret(secret) {
-    if (secret) localStorage.setItem('nastolki_ambassador_secret', secret);
-    else localStorage.removeItem('nastolki_ambassador_secret');
-  }
-  function renderAmbassadorBtn() {
-    var btn = document.getElementById('ambassadorBtn');
-    var active = !!getAmbassadorSecret();
-    btn.textContent = active ? 'амбассадор ✓' : 'я — амбассадор';
-    btn.classList.toggle('active', active);
-  }
-
   // the "это вы" button never reflected a saved identity -- it always said
   // "указать имя и почту" even right after saving. Show the saved name and email instead.
   function renderWhoAmI() {
@@ -283,6 +265,7 @@
     var tags = document.createElement('div');
     tags.className = 'card-tags';
     var tagValues = [capitalizeFirst(ev.city)];
+    if (ev.isClosed) tagValues.push('Закрытое');
     splitList(ev.format).forEach(function (t) { tagValues.push(t); });
     if (ev.difficulty) tagValues.push(ev.difficulty);
     if (ev.setting) {
@@ -343,8 +326,9 @@
     actions.appendChild(renderActionButton(ev));
     // "проявить интерес" -- for people this exact date/time/place doesn't suit, but who'd
     // like to play the game some other time; not shown once already signed up, for
-    // past/cancelled events, or for not-yet-published (Запланировано) ones
-    if (!past && ev.status !== 'Отменено' && ev.status !== 'Запланировано' && !isRegistered) {
+    // past/cancelled events, not-yet-published (Запланировано) ones, or closed events
+    // (which don't take open signups at all, so "interest" doesn't apply either)
+    if (!past && ev.status !== 'Отменено' && ev.status !== 'Запланировано' && !ev.isClosed && !isRegistered) {
       actions.appendChild(renderInterestButton(ev));
     }
 
@@ -436,6 +420,17 @@
       return cancelBtn;
     }
 
+    // закрытое мероприятие -- самостоятельная запись недоступна, только организатор
+    // добавляет участников (по почте); если мы вообще видим эту карточку, но не входим
+    // в список участников, кнопка просто неактивна
+    if (ev.isClosed) {
+      var closedBtn = document.createElement('button');
+      closedBtn.className = 'btn-primary';
+      closedBtn.disabled = true;
+      closedBtn.textContent = 'Закрытое — запись через организатора';
+      return closedBtn;
+    }
+
     var signBtn = document.createElement('button');
     signBtn.className = 'btn-primary';
     if (!ev.isOpen) {
@@ -455,8 +450,6 @@
     var me = getMe();
     var params = {};
     if (me && me.email) params.email = me.email;
-    var secret = getAmbassadorSecret();
-    if (secret) params.secret = secret;
     return apiGet('events', params).then(function (res) {
       if (!res.ok) throw new Error(res.error || 'load failed');
       state.events = res.events;
@@ -470,7 +463,6 @@
       renderFilters();
       renderGrid();
       renderWhoAmI();
-      renderAmbassadorBtn();
       highlightFromHash();
     });
   }
@@ -501,7 +493,6 @@
       hideOverlay('whoAmIOverlay');
       hideOverlay('signupOverlay');
       hideOverlay('interestOverlay');
-      hideOverlay('ambassadorOverlay');
     });
   });
   document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
@@ -514,19 +505,60 @@
     var me = getMe();
     document.getElementById('inputName').value = (me && me.name) || '';
     document.getElementById('inputEmail').value = (me && me.email) || '';
+    document.getElementById('inputPin').value = '';
+    document.getElementById('whoAmIError').hidden = true;
     showOverlay('whoAmIOverlay');
   });
 
+  // PIN проверяется только здесь, при подтверждении личности -- дальше сайт доверяет уже
+  // сохранённому в localStorage имени/почте (см. openSignupModal/openInterestModal)
   document.getElementById('saveWhoAmI').addEventListener('click', function () {
     var name = document.getElementById('inputName').value.trim();
     var email = document.getElementById('inputEmail').value.trim();
+    var pin = document.getElementById('inputPin').value.trim();
+    var errEl = document.getElementById('whoAmIError');
+    errEl.hidden = true;
+
     if (!name || !email.includes('@')) {
-      alert('Укажите имя и корпоративную почту');
+      errEl.textContent = 'Укажите имя и корпоративную почту';
+      errEl.hidden = false;
       return;
     }
-    setMe({ name: name, email: email });
-    hideOverlay('whoAmIOverlay');
-    refresh();
+    if (!/^\d{4}$/.test(pin)) {
+      errEl.textContent = 'Код должен состоять из 4 цифр';
+      errEl.hidden = false;
+      return;
+    }
+
+    var btn = document.getElementById('saveWhoAmI');
+    btn.disabled = true;
+    btn.textContent = 'Проверяем…';
+
+    apiPost({ action: 'identify', name: name, email: email, pin: pin })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.textContent = 'Сохранить';
+        if (!res.ok) {
+          if (res.error === 'wrong_pin') {
+            errEl.textContent = 'Неверный код для этой почты. Если не помните его — напишите амбассадору Дарье: ddkolesnik@beeline.ru';
+          } else if (res.error === 'invalid_pin') {
+            errEl.textContent = 'Код должен состоять из 4 цифр';
+          } else {
+            errEl.textContent = 'Не получилось сохранить, попробуйте ещё раз';
+          }
+          errEl.hidden = false;
+          return;
+        }
+        setMe({ name: name, email: email });
+        hideOverlay('whoAmIOverlay');
+        refresh();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Сохранить';
+        errEl.textContent = 'Ошибка сети, попробуйте ещё раз';
+        errEl.hidden = false;
+      });
   });
 
   // limits the "с гостями" dropdown to however many spots are actually left, so people
@@ -542,13 +574,19 @@
     select.innerHTML = options.join('');
   }
 
+  // личность (имя+почта) уже подтверждена через "это вы" -- если она ещё не задана,
+  // сразу открываем эту модалку вместо формы записи; после подтверждения человек просто
+  // нажимает «Записаться» ещё раз
   function openSignupModal(ev) {
-    state.pendingSignupEvent = ev;
     var me = getMe();
+    if (!me || !me.email) {
+      document.getElementById('whoAmIBtn').click();
+      return;
+    }
+    state.pendingSignupEvent = ev;
     document.getElementById('signupTitle').textContent = 'Записаться: ' + ev.game;
     document.getElementById('signupSubtitle').textContent = fmtDate(ev.date) + (ev.time ? ', ' + ev.time : '') + (ev.place ? ' · ' + ev.place : '');
-    document.getElementById('signupName').value = (me && me.name) || '';
-    document.getElementById('signupEmail').value = (me && me.email) || '';
+    document.getElementById('signupAsWhom').textContent = 'Записываемся как: ' + me.name + ' · ' + me.email;
     document.getElementById('signupError').hidden = true;
     renderGuestOptions(ev);
     showOverlay('signupOverlay');
@@ -556,21 +594,17 @@
 
   document.getElementById('confirmSignup').addEventListener('click', function () {
     var ev = state.pendingSignupEvent;
-    if (!ev) return;
-    var name = document.getElementById('signupName').value.trim();
-    var email = document.getElementById('signupEmail').value.trim();
+    var me = getMe();
+    if (!ev || !me || !me.email) return;
     var errEl = document.getElementById('signupError');
-    if (!name || !email.includes('@')) {
-      errEl.textContent = 'Укажите имя и корпоративную почту';
-      errEl.hidden = false;
-      return;
-    }
+    errEl.hidden = true;
+
     var btn = document.getElementById('confirmSignup');
     btn.disabled = true;
     btn.textContent = 'Записываем…';
 
     var guests = Number(document.getElementById('signupGuests').value) || 0;
-    apiPost({ action: 'signup', date: ev.date, time: ev.time, game: ev.game, name: name, email: email, guests: guests })
+    apiPost({ action: 'signup', date: ev.date, time: ev.time, game: ev.game, name: me.name, email: me.email, guests: guests })
       .then(function (res) {
         btn.disabled = false;
         btn.textContent = 'Записаться';
@@ -579,7 +613,6 @@
           errEl.hidden = false;
           return;
         }
-        setMe({ name: name, email: email });
         hideOverlay('signupOverlay');
         refresh();
       })
@@ -606,10 +639,11 @@
   }
 
   // публикация запланированного мероприятия -- сервер сам проверяет право (создатель по
-  // email или амбассадор по секрету), клиент просто отправляет то, что у него уже сохранено
+  // email или амбассадор -- роль ищется в листе «Аккаунты» по этому же email), клиент
+  // просто отправляет то, что у него уже сохранено
   function doPublish(ev) {
     var me = getMe();
-    apiPost({ action: 'publish', date: ev.date, time: ev.time, game: ev.game, email: (me && me.email) || '', secret: getAmbassadorSecret() })
+    apiPost({ action: 'publish', date: ev.date, time: ev.time, game: ev.game, email: (me && me.email) || '' })
       .then(function (res) {
         if (!res.ok) {
           alert('Не получилось опубликовать, попробуйте ещё раз');
@@ -620,31 +654,30 @@
   }
 
   function openInterestModal(ev) {
-    state.pendingInterestEvent = ev;
     var me = getMe();
+    if (!me || !me.email) {
+      document.getElementById('whoAmIBtn').click();
+      return;
+    }
+    state.pendingInterestEvent = ev;
     document.getElementById('interestTitle').textContent = 'Проявить интерес: ' + ev.game;
-    document.getElementById('interestName').value = (me && me.name) || '';
-    document.getElementById('interestEmail').value = (me && me.email) || '';
+    document.getElementById('interestAsWhom').textContent = 'Отправляем как: ' + me.name + ' · ' + me.email;
     document.getElementById('interestError').hidden = true;
     showOverlay('interestOverlay');
   }
 
   document.getElementById('confirmInterest').addEventListener('click', function () {
     var ev = state.pendingInterestEvent;
-    if (!ev) return;
-    var name = document.getElementById('interestName').value.trim();
-    var email = document.getElementById('interestEmail').value.trim();
+    var me = getMe();
+    if (!ev || !me || !me.email) return;
     var errEl = document.getElementById('interestError');
-    if (!name || !email.includes('@')) {
-      errEl.textContent = 'Укажите имя и корпоративную почту';
-      errEl.hidden = false;
-      return;
-    }
+    errEl.hidden = true;
+
     var btn = document.getElementById('confirmInterest');
     btn.disabled = true;
     btn.textContent = 'Отправляем…';
 
-    apiPost({ action: 'interest', date: ev.date, time: ev.time, game: ev.game, name: name, email: email })
+    apiPost({ action: 'interest', date: ev.date, time: ev.time, game: ev.game, name: me.name, email: me.email })
       .then(function (res) {
         btn.disabled = false;
         btn.textContent = 'Отправить';
@@ -653,7 +686,6 @@
           errEl.hidden = false;
           return;
         }
-        setMe({ name: name, email: email });
         hideOverlay('interestOverlay');
         refresh();
       })
@@ -671,27 +703,6 @@
     renderGrid();
   });
 
-  document.getElementById('ambassadorBtn').addEventListener('click', function () {
-    document.getElementById('ambassadorSecretInput').value = getAmbassadorSecret();
-    showOverlay('ambassadorOverlay');
-  });
-
-  document.getElementById('saveAmbassadorSecret').addEventListener('click', function () {
-    var secret = document.getElementById('ambassadorSecretInput').value.trim();
-    setAmbassadorSecret(secret);
-    hideOverlay('ambassadorOverlay');
-    renderAmbassadorBtn();
-    refresh();
-  });
-
-  document.getElementById('clearAmbassadorSecret').addEventListener('click', function () {
-    setAmbassadorSecret('');
-    document.getElementById('ambassadorSecretInput').value = '';
-    hideOverlay('ambassadorOverlay');
-    renderAmbassadorBtn();
-    refresh();
-  });
-
   // ---------- init ----------
   function showStatus(msg) {
     var el = document.getElementById('status');
@@ -701,7 +712,6 @@
 
   renderWhoAmI(); // show any saved identity immediately, even before the network call resolves
   renderPastToggle();
-  renderAmbassadorBtn();
 
   if (!API_URL || API_URL.indexOf('ВСТАВЬТЕ') !== -1) {
     document.getElementById('loadingState').textContent = 'Сайт ещё не подключён к таблице. Заполните APPS_SCRIPT_URL в config.js — см. SETUP.md.';
