@@ -553,6 +553,43 @@ async function identifyVia(doc, name, email, pin) {
   }
   console.log('PASS: reserving beyond maxParticipants is rejected server-side, count stays capped');
 
+  // 17. «Событие» (announce type) -- no signup, no participants/interest, no reserved-seats
+  // stepper, badge just reads "Событие". Created dynamically so it doesn't shift any of the
+  // fixed card-count assertions above.
+  const ceForEvent = await fetch(API, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'createEvent', eventType: 'event', date: '2026-12-05', time: '19:00', city: 'Москва',
+      organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', game: 'Пятничные посиделки клуба', place: 'Клубик'
+    })
+  }).then(r => r.json());
+  if (!ceForEvent.ok) throw new Error('setup: failed to create the dedicated "событие" test event');
+
+  const dom11 = freshDom(html);
+  dom11.window.localStorage.setItem('nastolki_me', JSON.stringify({ name: 'Даша', email: 'dasha@beeline.ru' }));
+  dom11.window.eval(appJs);
+  const doc11 = dom11.window.document;
+  await waitFor(() => Array.from(doc11.querySelectorAll('.card')).some(c => c.querySelector('.card-game').textContent === 'Пятничные посиделки клуба'));
+  const eventCard = Array.from(doc11.querySelectorAll('.card')).find(c => c.querySelector('.card-game').textContent === 'Пятничные посиделки клуба');
+
+  const eventBadge = eventCard.querySelector('.badge');
+  if (eventBadge.textContent !== 'Событие') throw new Error('«событие» badge wrong: ' + eventBadge.textContent);
+  console.log('PASS: «событие» card shows a "Событие" badge instead of "Идёт запись"/"Мест нет"');
+
+  if (eventCard.querySelector('.card-participants')) throw new Error('«событие» card should not render a participants block');
+  if (eventCard.querySelector('.card-interest')) throw new Error('«событие» card should not render an interest line');
+  if (eventCard.querySelector('.card-reserved')) throw new Error('«событие» card should not render the reserved-seats stepper, even for its own organizer');
+  console.log('PASS: «событие» card has no participants/interest/reserved-seats blocks');
+
+  const eventCardButtons = eventCard.querySelectorAll('.card-actions button');
+  if (eventCardButtons.length !== 0) throw new Error('«событие» card should have no signup/interest buttons, got: ' + eventCardButtons.length);
+  if (eventCard.querySelector('.card-actions')) throw new Error('«событие» card should not render an empty .card-actions element at all');
+  console.log('PASS: «событие» card has no action buttons (no signup/cancel/interest)');
+
+  // where/when/city still render normally for an event
+  if (!eventCard.querySelector('.card-meta').textContent.includes('Клубик')) throw new Error('«событие» card should still show "где"');
+  console.log('PASS: «событие» card still shows место/дата/город like a normal card');
+
   console.log('\nALL TESTS PASSED');
   process.exit(0);
 })().catch(err => {

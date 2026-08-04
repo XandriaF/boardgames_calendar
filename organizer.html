@@ -16,18 +16,23 @@
 
   <div class="head">
     <span class="tag">для организаторов</span>
-    <h1 class="hero hero-sm">анонсировать <span class="accent">игру</span></h1>
-    <p class="lead md">заполните форму — мероприятие сразу появится на сайте и в таблице, а внизу получите готовый текст поста для вашего чата.</p>
+    <h1 class="hero hero-sm" id="pageTitle">анонсировать <span class="accent">игру</span></h1>
+    <p class="lead md" id="pageLead">заполните форму — мероприятие сразу появится на сайте и в таблице, а внизу получите готовый текст поста для вашего чата.</p>
   </div>
 
   <p class="cap mut3 footer-note back-link"><a href="index.html" style="color:inherit">← ко всем мероприятиям</a></p>
+
+  <div class="pillrow" id="typeToggle" style="margin-bottom:18px">
+    <button type="button" class="chip active" data-type="game">Анонсировать игру</button>
+    <button type="button" class="chip" data-type="event">Анонсировать событие</button>
+  </div>
 
   <section id="formStatus" class="note" hidden></section>
 
   <form class="card form-card" id="eventForm">
     <div class="form-grid">
       <label class="field field-wide">
-        <span>Игра *</span>
+        <span id="fGameLabel">Игра *</span>
         <input type="text" id="fGame" placeholder="Каркассон" required>
       </label>
       <label class="field">
@@ -48,7 +53,7 @@
         <span>Свой город *</span>
         <input type="text" id="fCityOther" placeholder="Впишите город">
       </label>
-      <div class="field field-wide">
+      <div class="field field-wide field-game-only">
         <span>Жанр (можно несколько)</span>
         <div class="pillrow" id="fFormatGroup"></div>
       </div>
@@ -63,11 +68,11 @@
         </div>
         <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
       </div>
-      <label class="field">
+      <label class="field field-game-only">
         <span>Макс. участников</span>
         <input type="number" id="fMax" min="1" placeholder="без ограничений">
       </label>
-      <label class="field">
+      <label class="field field-game-only">
         <span>Сложность</span>
         <select id="fDifficulty">
           <option value="">не указано</option>
@@ -76,42 +81,42 @@
           <option value="Сложная">Сложная</option>
         </select>
       </label>
-      <label class="field">
+      <label class="field field-game-only">
         <span>Макс. время игры, мин</span>
         <input type="number" id="fMaxDuration" min="1" placeholder="120">
         <span class="field-hint">Это время партии при максимальном числе участников — с меньшей компанией обычно быстрее</span>
       </label>
-      <label class="field field-wide">
+      <label class="field field-wide field-game-only">
         <span>Сеттинг</span>
         <input type="text" id="fSetting" list="settingList" placeholder="фэнтези, космос, детектив, зомби-апокалипсис...">
         <datalist id="settingList"></datalist>
         <span class="field-hint">Ключевые слова через запятую — помогают сразу понять атмосферу игры</span>
       </label>
-      <label class="field field-wide">
+      <label class="field field-wide field-game-only">
         <span>Ссылка на картинку</span>
         <input type="url" id="fImage" placeholder="https://... (необязательно)">
         <span class="field-hint">Ссылка на изображение игры (например, обложка коробки) — покажется на карточке анонса. Если оставить пустым, но заполнить ссылку на BGG ниже — попробуем подтянуть обложку сами</span>
       </label>
-      <label class="field">
+      <label class="field field-game-only">
         <span>Ссылка на Тесеру</span>
         <input type="url" id="fTesera" placeholder="https://tesera.ru/game/... (необязательно)">
       </label>
-      <label class="field">
+      <label class="field field-game-only">
         <span>Ссылка на BGG</span>
         <input type="url" id="fBgg" placeholder="https://boardgamegeek.com/boardgame/... (необязательно)">
       </label>
-      <label class="field field-wide">
+      <label class="field field-wide field-game-only">
         <span>Комментарий / ссылка</span>
         <input type="text" id="fNote" placeholder="необязательно">
       </label>
-      <div class="field field-wide">
+      <div class="field field-wide field-game-only">
         <label class="field-checkbox">
           <input type="checkbox" id="fClosed">
           <span>Закрытое мероприятие (запись только через организатора)</span>
         </label>
         <p class="field-warning" id="closedWarning" hidden>Другие пользователи не смогут сами записаться на это мероприятие — только вы можете добавить участников, перечислив их почты ниже, при создании. Добавить кого-то ещё позже можно будет только вручную в таблице.</p>
       </div>
-      <label class="field field-wide" id="fClosedParticipantsWrap" hidden>
+      <label class="field field-wide field-game-only" id="fClosedParticipantsWrap" hidden>
         <span>Участники закрытого мероприятия</span>
         <textarea id="fClosedParticipants" rows="4" placeholder="Иван Иванов, ivan.ivanov@beeline.ru"></textarea>
         <span class="field-hint">По одному участнику на строку: имя, запятая, корпоративная почта</span>

@@ -136,6 +136,9 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
     var organizerEmail = normalizeEmail(row[16] || '');
     var isClosed = isClosedVal(row[17]);
     var reservedCount = Number(row[18]) || 0; // места, занятые организатором вручную (+/-), без имени/почты
+    // «Тип»: Игра (полный анонс с записью) или Событие (только описание/где/когда, без записи
+    // и без счётчика мест). Пусто = Игра, для обратной совместимости со старыми строками.
+    var type = String(row[19] || '').trim() === 'Событие' ? 'event' : 'game';
 
     if (!date || !game) continue;
 
@@ -180,6 +183,7 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       status: status,
       isClosed: isClosed,
+      type: type,
       note: note || '',
       difficulty: difficulty || '',
       maxDuration: maxDuration ? Number(maxDuration) : null,
@@ -312,6 +316,11 @@ function handleCreateEvent(body) {
   // «закрытое» мероприятие -- запись только через организатора: участники перечисляются
   // списком прямо при создании (ниже), самостоятельно записаться на сайте нельзя
   var isClosed = !!body.isClosed;
+  // «Тип»: Игра (полный анонс с записью) или Событие (только описание/где/когда, без записи
+  // и без счётчика мест) -- «закрытое» для событий не имеет смысла, поэтому принудительно false
+  var eventType = body.eventType === 'event' ? 'event' : 'game';
+  var eventTypeLabel = eventType === 'event' ? 'Событие' : 'Игра';
+  if (eventType === 'event') isClosed = false;
 
   if (!date || !game || !city || !organizer || !organizerEmail) {
     return { ok: false, error: 'missing fields' };
@@ -347,7 +356,8 @@ function handleCreateEvent(body) {
     imageUrl,
     organizerEmail,
     isClosed,
-    0 // Занято организатором -- счётчик мест без имени/почты, изначально 0
+    0, // Занято организатором -- счётчик мест без имени/почты, изначально 0
+    eventTypeLabel
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
@@ -732,6 +742,7 @@ function formatCalendarEventLine(ev) {
   if (ev.time) parts.push(ev.time);
   parts.push(ev.game);
   if (ev.isClosed) parts.push('[закрытое]');
+  if (ev.type === 'event') parts.push('[событие]');
   if (ev.place) parts.push('(' + ev.place + ')');
   if (ev.organizer) parts.push('· ' + ev.organizer);
   return parts.join(' ');
@@ -747,10 +758,11 @@ function groupEventsByDate() {
     var row = values[r];
     var date = row[0], time = formatTimeVal(row[1]), game = row[4], place = row[5], organizer = row[6], status = row[8];
     var isClosed = isClosedVal(row[17]);
+    var type = String(row[19] || '').trim() === 'Событие' ? 'event' : 'game';
     if (!date || !game) continue;
     var dateStr = formatDate(date);
     if (!map[dateStr]) map[dateStr] = [];
-    map[dateStr].push({ time: time, game: game, place: place, organizer: organizer, status: status, isClosed: isClosed });
+    map[dateStr].push({ time: time, game: game, place: place, organizer: organizer, status: status, isClosed: isClosed, type: type });
   }
   return map;
 }

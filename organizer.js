@@ -56,6 +56,47 @@
 
   var selectedGenres = [];
 
+  // ---------- тип анонса: игра (полная форма) / событие (без записи, только описание) ----------
+  var currentType = 'game';
+
+  function setType(type) {
+    currentType = type;
+    document.querySelectorAll('#typeToggle .chip').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-type') === type);
+    });
+
+    var isEvent = type === 'event';
+    document.querySelectorAll('.field-game-only').forEach(function (el) {
+      // «закрытое» участники -- своя логика видимости (завязана на чекбокс), не трогаем
+      // её напрямую здесь, чтобы не спорить с обработчиком fClosed ниже
+      if (el.id === 'fClosedParticipantsWrap') return;
+      el.hidden = isEvent;
+    });
+    if (isEvent) {
+      document.getElementById('fClosedParticipantsWrap').hidden = true;
+    } else {
+      document.getElementById('fClosedParticipantsWrap').hidden = !document.getElementById('fClosed').checked;
+    }
+
+    var label = document.getElementById('fGameLabel');
+    var input = document.getElementById('fGame');
+    if (isEvent) {
+      label.textContent = 'Описание события *';
+      input.placeholder = 'Например: субботник, встреча клуба, деньрождение офиса...';
+      document.getElementById('pageTitle').innerHTML = 'анонсировать <span class="accent">событие</span>';
+      document.getElementById('pageLead').textContent = 'без записи и мест — просто отметка на сайте, что и когда будет. Заполните описание, город, где и когда.';
+    } else {
+      label.textContent = 'Игра *';
+      input.placeholder = 'Каркассон';
+      document.getElementById('pageTitle').innerHTML = 'анонсировать <span class="accent">игру</span>';
+      document.getElementById('pageLead').textContent = 'заполните форму — мероприятие сразу появится на сайте и в таблице, а внизу получите готовый текст поста для вашего чата.';
+    }
+  }
+
+  document.querySelectorAll('#typeToggle .chip').forEach(function (btn) {
+    btn.addEventListener('click', function () { setType(btn.getAttribute('data-type')); });
+  });
+
   function renderGenreChips() {
     var el = document.getElementById('fFormatGroup');
     el.innerHTML = '';
@@ -120,6 +161,16 @@
 
   function buildPostText(ev, link) {
     var lines = [];
+    if (ev.eventType === 'event') {
+      lines.push('📌 ' + ev.game);
+      lines.push('');
+      lines.push('📅 ' + fmtDate(ev.date) + (ev.time ? ', ' + ev.time : ''));
+      lines.push('📍 ' + ev.city + (ev.place ? ' — ' + ev.place : ''));
+      if (ev.organizer) lines.push('👤 Организатор: ' + ev.organizer);
+      lines.push('');
+      lines.push('Подробнее: ' + link);
+      return lines.join('\n');
+    }
     lines.push('🎲 ' + ev.game);
     lines.push('');
     lines.push('📅 ' + fmtDate(ev.date) + (ev.time ? ', ' + ev.time : ''));
@@ -196,7 +247,8 @@
       bggUrl: document.getElementById('fBgg').value.trim(),
       note: document.getElementById('fNote').value.trim(),
       isClosed: document.getElementById('fClosed').checked,
-      closedParticipants: parseClosedParticipants()
+      closedParticipants: parseClosedParticipants(),
+      eventType: currentType
     };
   }
 
@@ -209,7 +261,7 @@
       return;
     }
     if (!ev.date || !ev.city || !ev.game) {
-      showFormError('Заполните дату, город и игру');
+      showFormError(ev.eventType === 'event' ? 'Заполните дату, город и описание события' : 'Заполните дату, город и игру');
       return;
     }
 
@@ -228,7 +280,8 @@
       maxParticipants: ev.maxParticipants, note: ev.note,
       difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
       imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl,
-      isClosed: ev.isClosed, closedParticipants: ev.closedParticipants
+      isClosed: ev.isClosed, closedParticipants: ev.closedParticipants,
+      eventType: ev.eventType
     }).then(function (res) {
       nowBtn.disabled = false;
       scheduleBtn.disabled = false;
@@ -307,6 +360,7 @@
     document.getElementById('closedWarning').hidden = true;
     document.getElementById('fClosedParticipantsWrap').hidden = true;
     selectedGenres = [];
+    setType('game');
     renderWhoAmI();
     loadSuggestions();
   });
@@ -390,6 +444,7 @@
     document.getElementById('submitNowBtn').disabled = true;
     document.getElementById('submitScheduleBtn').disabled = true;
   } else {
+    setType('game');
     renderWhoAmI();
     loadSuggestions();
   }

@@ -9,18 +9,18 @@ function capitalizeFirst(s) {
 }
 
 const events = [
-  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg', isClosed: false, reservedCount: 0 },
-  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
-  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
+  { date: '2026-08-07', time: '18:00', city: 'Москва', format: 'Стратегия, Евро', game: 'Таверна Красный дракон', place: 'Клубик', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: 2, status: 'Набор открыт', note: '', difficulty: 'Средняя', maxDuration: 90, teseraUrl: 'https://tesera.ru/game/tavern/', bggUrl: 'https://boardgamegeek.com/boardgame/tavern', setting: 'фэнтези, таверна', imageUrl: 'https://example.com/tavern.jpg', isClosed: false, reservedCount: 0, type: 'game' },
+  { date: '2026-08-08', time: '12:20', city: 'Санкт-Петербург', format: 'НРИ', game: 'Брасс Бирмингем', place: 'МПК', organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', maxParticipants: null, status: 'Набрано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0, type: 'game' },
+  { date: '2026-08-04', time: '', city: 'Москва', format: 'Стратегия', game: 'Descent', place: '', organizer: 'Влад', organizerEmail: 'vlad@beeline.ru', maxParticipants: null, status: 'Отменено', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0, type: 'game' },
   // deliberately in the past relative to "today" (sandbox clock is 2026-07-31) and still
   // marked "Набор открыт" -- exercises the client-side past-event override on its own
-  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
+  { date: '2026-07-20', time: '18:30', city: 'Москва', format: 'Стратегия', game: 'Корона из пепла', place: 'ШК', organizer: 'Настя', organizerEmail: 'nastya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0, type: 'game' },
   // scheduled/private: not published yet -- only visible to olya@beeline.ru (its creator)
   // or an ambassador, until it's explicitly published
-  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0 },
+  { date: '2026-08-15', time: '19:00', city: 'Москва', format: 'Абстрактная', game: 'Тайный проект', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Запланировано', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: false, reservedCount: 0, type: 'game' },
   // closed/private: publicly-statused but hidden from the general grid -- visible only to
   // its organizer, ambassadors, or its (pre-added) participants
-  { date: '2026-08-20', time: '18:00', city: 'Москва', format: 'Кооперативная', game: 'Секретный клуб', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: true, reservedCount: 0 },
+  { date: '2026-08-20', time: '18:00', city: 'Москва', format: 'Кооперативная', game: 'Секретный клуб', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru', maxParticipants: null, status: 'Набор открыт', note: '', difficulty: '', maxDuration: null, teseraUrl: '', bggUrl: '', setting: '', imageUrl: '', isClosed: true, reservedCount: 0, type: 'game' },
 ];
 
 let signups = [];
@@ -85,6 +85,7 @@ function visibleEvents(viewerEmail, hasAmbassadorAccess) {
       id: key, date: e.date, time: e.time, city: capitalizeFirst(e.city), format: e.format, game: capitalizeFirst(e.game),
       place: e.place, organizer: capitalizeFirst(e.organizer), organizerEmail: e.organizerEmail || '',
       maxParticipants: e.maxParticipants, status: e.status, isClosed: !!e.isClosed,
+      type: e.type === 'event' ? 'event' : 'game',
       note: e.note, difficulty: e.difficulty || '', maxDuration: e.maxDuration || null,
       teseraUrl: e.teseraUrl || '', bggUrl: e.bggUrl || '', setting: e.setting || '', imageUrl: e.imageUrl || '',
       participantsCount: headcount,
@@ -191,7 +192,9 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ ok: false, error: 'duplicate' })); return;
         }
         const status = payload.publishNow === false ? 'Запланировано' : 'Набор открыт';
-        const isClosed = !!payload.isClosed;
+        const type = payload.eventType === 'event' ? 'event' : 'game';
+        // «закрытое» не имеет смысла для «событий» -- принудительно снимаем, как и в Code.gs
+        const isClosed = type === 'event' ? false : !!payload.isClosed;
         events.push({
           date: payload.date, time: payload.time || '', city: capitalizeFirst(payload.city), format: payload.format || '',
           game: capitalizeFirst(payload.game), place: payload.place || '', organizer: capitalizeFirst(payload.organizer),
@@ -199,7 +202,7 @@ const server = http.createServer((req, res) => {
           maxParticipants: payload.maxParticipants || null, status, note: payload.note || '',
           difficulty: payload.difficulty || '', maxDuration: payload.maxDuration || null,
           teseraUrl: payload.teseraUrl || '', bggUrl: payload.bggUrl || '', setting: payload.setting || '',
-          imageUrl: payload.imageUrl || '', isClosed, reservedCount: 0
+          imageUrl: payload.imageUrl || '', isClosed, reservedCount: 0, type
         });
         if (isClosed && Array.isArray(payload.closedParticipants)) {
           payload.closedParticipants.forEach(p => {

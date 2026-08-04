@@ -310,6 +310,71 @@ function fireEvent(win, el, type) {
   }
   console.log('PASS: self-registration on a closed event is rejected server-side too');
 
+  // ---- «Анонсировать событие»: переключатель прячет игровые поля, меняет подписи, и
+  // публикует мероприятие без записи (тип «Событие», без счётчика мест) ----
+  doc.getElementById('resetBtn').click();
+  await waitFor(() => doc.getElementById('eventForm').hidden === false);
+
+  const eventToggleBtn = Array.from(doc.querySelectorAll('#typeToggle .chip')).find(b => b.getAttribute('data-type') === 'event');
+  const gameToggleBtn = Array.from(doc.querySelectorAll('#typeToggle .chip')).find(b => b.getAttribute('data-type') === 'game');
+  eventToggleBtn.click();
+  if (!eventToggleBtn.classList.contains('active') || gameToggleBtn.classList.contains('active')) {
+    throw new Error('clicking "Анонсировать событие" should activate that chip and deactivate "Анонсировать игру"');
+  }
+  console.log('PASS: "Анонсировать событие" chip toggles active state');
+
+  if (doc.getElementById('fGameLabel').textContent !== 'Описание события *') {
+    throw new Error('field label should switch to "Описание события *", got: ' + doc.getElementById('fGameLabel').textContent);
+  }
+  const gameOnlyFields = Array.from(doc.querySelectorAll('.field-game-only'));
+  if (!gameOnlyFields.every(el => el.hidden)) {
+    throw new Error('all .field-game-only fields should be hidden in «событие» mode');
+  }
+  console.log('PASS: game-only fields (жанр/макс.участников/сложность/etc) are hidden in «событие» mode, label switched');
+
+  // «где» (место) and the organizer-identity block are NOT game-only -- they stay visible
+  if (doc.getElementById('fPlace').closest('.field').hidden) throw new Error('"Место" field should stay visible for «событие»');
+  console.log('PASS: "Место" field stays visible in «событие» mode');
+
+  doc.getElementById('fDate').value = '2026-12-06';
+  doc.getElementById('fTime').value = '19:00';
+  pickCity('Москва');
+  doc.getElementById('fPlace').value = 'Клубик';
+  doc.getElementById('fGame').value = 'Субботник в офисе';
+
+  submitEvent();
+  await waitFor(() => doc.getElementById('resultCard').hidden === false);
+  console.log('PASS: «событие» submitted successfully with just описание/город/где/когда');
+
+  const eventPostText = doc.getElementById('postText').value;
+  if (!eventPostText.includes('📌 Субботник в офисе')) throw new Error('«событие» post text should lead with 📌 + описание, got:\n' + eventPostText);
+  if (eventPostText.includes('👥 Мест') || eventPostText.includes('Записаться:')) {
+    throw new Error('«событие» post text should not mention "Мест"/"Записаться" (no signup concept), got:\n' + eventPostText);
+  }
+  if (!eventPostText.includes('Подробнее:')) throw new Error('«событие» post text should end with "Подробнее: <link>", got:\n' + eventPostText);
+  console.log('PASS: «событие» post text uses the short 📌 format, no seats/signup line');
+
+  const rawEventsAfterEventType = await fetch(API + '?action=events').then(r => r.json());
+  const createdEventEntry = rawEventsAfterEventType.events.find(e => e.game === 'Субботник в офисе');
+  if (!createdEventEntry || createdEventEntry.type !== 'event') {
+    throw new Error('created «событие» should be stored with type="event", got: ' + JSON.stringify(createdEventEntry));
+  }
+  console.log('PASS: «событие» stored server-side with type="event"');
+
+  // switching back to "Анонсировать игру" (e.g. after a reset) restores the full form
+  doc.getElementById('resetBtn').click();
+  await waitFor(() => doc.getElementById('eventForm').hidden === false);
+  if (!Array.from(doc.querySelectorAll('#typeToggle .chip')).find(b => b.getAttribute('data-type') === 'game').classList.contains('active')) {
+    throw new Error('reset should default the type toggle back to "Анонсировать игру"');
+  }
+  if (doc.getElementById('fGameLabel').textContent !== 'Игра *') {
+    throw new Error('field label should revert to "Игра *" after reset, got: ' + doc.getElementById('fGameLabel').textContent);
+  }
+  if (Array.from(doc.querySelectorAll('.field-game-only')).every(el => el.hidden)) {
+    throw new Error('game-only fields should be visible again after resetting back to "игра" mode');
+  }
+  console.log('PASS: reset defaults back to "Анонсировать игру" mode with game-only fields visible again');
+
   console.log('\nALL ORGANIZER TESTS PASSED');
   process.exit(0);
 })().catch(err => {

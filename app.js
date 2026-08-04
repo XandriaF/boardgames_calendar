@@ -238,6 +238,10 @@
     } else if (past) {
       badgeClass = 'badge-past';
       badgeText = 'Уже прошло';
+    } else if (ev.type === 'event') {
+      // «Событие» -- просто отметка, без записи и мест, поэтому не «Идёт запись»/«Мест нет»
+      badgeClass = 'badge-open';
+      badgeText = 'Событие';
     } else {
       badgeClass = ev.isOpen ? 'badge-open' : 'badge-full';
       badgeText = STATUS_LABEL[ev.status] || ev.status;
@@ -292,31 +296,38 @@
       if (ev.bggUrl) links.appendChild(externalLink('Об игре подробнее (bgg)', ev.bggUrl));
     }
 
-    var participants = document.createElement('div');
-    participants.className = 'card-participants';
-    var countText = ev.maxParticipants
-      ? (ev.participantsCount + ' из ' + ev.maxParticipants + ' (свободно: ' + Math.max(0, ev.maxParticipants - ev.participantsCount) + ')')
-      : (ev.participantsCount + ' записалось');
-    participants.innerHTML = '<b>' + countText + '</b>';
-    if (ev.participants && ev.participants.length) {
-      var namesWrap = document.createElement('span');
-      namesWrap.className = 'names';
-      namesWrap.appendChild(document.createTextNode(' — '));
-      ev.participants.forEach(function (p, i) {
-        if (i > 0) namesWrap.appendChild(document.createTextNode(', '));
-        var pName = document.createElement('span');
-        if (p.email) {
-          pName.className = 'hoverable-email';
-          pName.title = p.email;
-        }
-        pName.textContent = capitalizeFirst(p.name) + (p.guests ? ' +' + p.guests : '');
-        namesWrap.appendChild(pName);
-      });
-      participants.appendChild(namesWrap);
+    // «Событие» -- просто отметка (описание/где/когда), без записи и без счётчика мест,
+    // поэтому блок участников/интереса/резерва для него не строится вовсе
+    var isEventType = ev.type === 'event';
+
+    var participants = null;
+    if (!isEventType) {
+      participants = document.createElement('div');
+      participants.className = 'card-participants';
+      var countText = ev.maxParticipants
+        ? (ev.participantsCount + ' из ' + ev.maxParticipants + ' (свободно: ' + Math.max(0, ev.maxParticipants - ev.participantsCount) + ')')
+        : (ev.participantsCount + ' записалось');
+      participants.innerHTML = '<b>' + countText + '</b>';
+      if (ev.participants && ev.participants.length) {
+        var namesWrap = document.createElement('span');
+        namesWrap.className = 'names';
+        namesWrap.appendChild(document.createTextNode(' — '));
+        ev.participants.forEach(function (p, i) {
+          if (i > 0) namesWrap.appendChild(document.createTextNode(', '));
+          var pName = document.createElement('span');
+          if (p.email) {
+            pName.className = 'hoverable-email';
+            pName.title = p.email;
+          }
+          pName.textContent = capitalizeFirst(p.name) + (p.guests ? ' +' + p.guests : '');
+          namesWrap.appendChild(pName);
+        });
+        participants.appendChild(namesWrap);
+      }
     }
 
     var interestLine = null;
-    if (ev.interestCount) {
+    if (!isEventType && ev.interestCount) {
       interestLine = document.createElement('div');
       interestLine.className = 'card-interest';
       interestLine.textContent = '🙋 ещё ' + ev.interestCount + ' ' + pluralizeWant(ev.interestCount) + ' сыграть в другое время';
@@ -326,19 +337,21 @@
     // например, если часть игроков договорилась вне сайта. Виден только самому организатору.
     var reservedRow = null;
     var me = getMe();
-    if (ev.status !== 'Отменено' && ev.organizerEmail && me && me.email && me.email === ev.organizerEmail) {
+    if (!isEventType && ev.status !== 'Отменено' && ev.organizerEmail && me && me.email && me.email === ev.organizerEmail) {
       reservedRow = renderReservedStepper(ev);
     }
 
     var isRegistered = state.registeredIds.indexOf(ev.id) !== -1;
     var actions = document.createElement('div');
     actions.className = 'card-actions';
-    actions.appendChild(renderActionButton(ev));
+    var actionBtn = renderActionButton(ev);
+    if (actionBtn) actions.appendChild(actionBtn);
     // "проявить интерес" -- for people this exact date/time/place doesn't suit, but who'd
     // like to play the game some other time; not shown once already signed up, for
-    // past/cancelled events, not-yet-published (Запланировано) ones, or closed events
-    // (which don't take open signups at all, so "interest" doesn't apply either)
-    if (!past && ev.status !== 'Отменено' && ev.status !== 'Запланировано' && !ev.isClosed && !isRegistered) {
+    // past/cancelled events, not-yet-published (Запланировано) ones, closed events
+    // (which don't take open signups at all, so "interest" doesn't apply either), or
+    // «события» (нет самой концепции записи/партии в другое время)
+    if (!isEventType && !past && ev.status !== 'Отменено' && ev.status !== 'Запланировано' && !ev.isClosed && !isRegistered) {
       actions.appendChild(renderInterestButton(ev));
     }
 
@@ -348,10 +361,10 @@
     card.appendChild(tags);
     card.appendChild(meta);
     if (links) card.appendChild(links);
-    card.appendChild(participants);
+    if (participants) card.appendChild(participants);
     if (interestLine) card.appendChild(interestLine);
     if (reservedRow) card.appendChild(reservedRow);
-    card.appendChild(actions);
+    if (actions.children.length) card.appendChild(actions);
     return card;
   }
 
@@ -463,6 +476,11 @@
       pastBtn.disabled = true;
       pastBtn.textContent = 'Уже прошло';
       return pastBtn;
+    }
+
+    // «Событие» -- без записи, показывать нечего (кнопка не нужна вовсе)
+    if (ev.type === 'event') {
+      return null;
     }
 
     if (isRegistered) {

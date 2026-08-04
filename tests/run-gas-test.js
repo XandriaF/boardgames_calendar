@@ -9,24 +9,26 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 // ---- fixture data, matching the exact column order of the real sheets ----
 // Мероприятия: Дата, Время, Город, Жанр, Игра, Место, Организатор, Макс.участников, Статус, Комментарий,
 //              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора, Закрытое,
-//              Занято организатором
+//              Занято организатором, Тип
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое','Занято организатором'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false, 0],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false, 0],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое','Занято организатором','Тип'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false, 0, 'Игра'],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false, 0, 'Игра'],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'],
   // scheduled/unpublished -- only visible to its creator (olya@beeline.ru) or an ambassador,
   // not in the general public list
-  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false, 0],
+  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false, 0, 'Игра'],
   // closed/private: publicly-statused but hidden from the general grid -- visible only to
   // its organizer, ambassadors, or its (creation-time) participants
-  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true, 0],
+  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true, 0, 'Игра'],
   // has 2 seats already manually reserved (organizer marked them via +/-, no name/email)
-  [new Date('2026-10-15T00:00:00'), '18:00', 'Москва', 'Пати', 'Мафия', '', 'Витя', 5, 'Набор открыт', '', '', '', '', '', '', '', 'vitya3@beeline.ru', false, 2],
+  [new Date('2026-10-15T00:00:00'), '18:00', 'Москва', 'Пати', 'Мафия', '', 'Витя', 5, 'Набор открыт', '', '', '', '', '', '', '', 'vitya3@beeline.ru', false, 2, 'Игра'],
+  // «Событие» -- просто отметка (описание/где/когда/город), без записи; колонка Т = "Событие"
+  [new Date('2026-10-25T00:00:00'), '19:00', 'Москва', '', 'Пятничные посиделки клуба', 'Клубик', 'Даша', '', 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Событие'],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
@@ -169,7 +171,14 @@ const r1 = callDoGet({ action: 'events' });
 check('doGet events ok', r1.ok === true);
 check('draft (Черновик) hidden from public list', !r1.events.some(e => e.game === 'Нечто'));
 check('closed event (Приватная встреча) hidden from anonymous public list', !r1.events.some(e => e.game === 'Приватная встреча'));
-check('5 public events returned', r1.events.length === 5);
+check('6 public events returned', r1.events.length === 6);
+
+const dracon0 = r1.events.find(e => e.game === 'Таверна Красный дракон');
+check('regular event defaults to type="game"', dracon0 && dracon0.type === 'game');
+
+const fridayMeetup = r1.events.find(e => e.game === 'Пятничные посиделки клуба');
+check('«событие» fixture read from column T as type="event"', fridayMeetup && fridayMeetup.type === 'event');
+check('«событие» still carries где/когда/город like a normal event', fridayMeetup && fridayMeetup.place === 'Клубик' && fridayMeetup.city === 'Москва');
 
 const mafia = r1.events.find(e => e.game === 'Мафия');
 check('event with 2 manually-reserved seats (no name/email) reflects that in participantsCount',
@@ -319,6 +328,30 @@ check('createEvent wrote imageUrl into column P', newRow[15] === 'https://exampl
 check('createEvent wrote organizerEmail into column Q', newRow[16] === 'olya@beeline.ru');
 check('createEvent defaults isClosed to false in column R', newRow[17] === false);
 check('createEvent defaults reservedCount to 0 in column S', newRow[18] === 0);
+check('createEvent without eventType defaults to "Игра" in column T', newRow[19] === 'Игра');
+
+// ---- «Тип»: анонс события (eventType:'event') -- описание/где/когда/город only, no
+// signup concept; «закрытое» is forced off even if the client somehow still sent it
+const ceEvent = callDoPost({
+  action: 'createEvent', date: '2026-09-18', time: '20:00', city: 'Москва', format: '',
+  game: 'Субботник в офисе', place: 'Опен-спейс', organizer: 'Оля', organizerEmail: 'olya@beeline.ru',
+  eventType: 'event', isClosed: true, closedParticipants: [{ name: 'Кто-то', email: 'someone@beeline.ru' }]
+});
+check('createEvent with eventType:"event" ok', ceEvent.ok === true);
+const eventRow = eventsRows[eventsRows.length - 1];
+check('createEvent wrote "Событие" into column T', eventRow[19] === 'Событие');
+check('createEvent forces isClosed=false in column R for a «событие», even if the client sent isClosed:true', eventRow[17] === false);
+
+const rEventType = callDoGet({ action: 'events' });
+const createdEventType = rEventType.events.find(e => e.game === 'Субботник в офисе');
+check('newly created «событие» visible via doGet with type="event"', createdEventType && createdEventType.type === 'event');
+check('«событие» with isClosed forced off is publicly visible (not hidden like a closed event)', !!createdEventType);
+
+// a "закрытое" participant list is meaningless once isClosed was forced to false for an
+// событие -- confirm no signup row was created for it either
+const rEventTypeParticipant = callDoGet({ action: 'events', email: 'someone@beeline.ru' });
+check('a closedParticipants entry is not auto-registered for a forced-open «событие»',
+  !rEventTypeParticipant.registeredIds.includes(createdEventType && createdEventType.id));
 
 // ---- BGG cover auto-fetch ----
 // no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
