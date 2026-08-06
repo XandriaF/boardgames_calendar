@@ -59,6 +59,133 @@
   // ---------- тип анонса: игра (полная форма) / событие (без записи, только описание) ----------
   var currentType = 'game';
 
+  // ---------- «Событие»: опциональный список прикреплённых настольных игр ----------
+  // каждый элемент -- те же поля, что и у обычного анонса игры (кроме «Макс. участников» --
+  // у события в принципе нет мест/записи)
+  var eventGamesState = [];
+
+  function makeLabeledField(labelText, inputEl, wide) {
+    var label = document.createElement('label');
+    label.className = 'field' + (wide ? ' field-wide' : '');
+    var span = document.createElement('span');
+    span.textContent = labelText;
+    label.appendChild(span);
+    label.appendChild(inputEl);
+    return label;
+  }
+
+  function renderEventGames() {
+    var wrap = document.getElementById('eventGamesList');
+    wrap.innerHTML = '';
+    eventGamesState.forEach(function (g, idx) {
+      var block = document.createElement('div');
+      block.className = 'event-game-block';
+
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'event-game-remove';
+      removeBtn.title = 'Убрать эту игру';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', function () {
+        eventGamesState.splice(idx, 1);
+        renderEventGames();
+      });
+      block.appendChild(removeBtn);
+
+      var indexLabel = document.createElement('div');
+      indexLabel.className = 'event-game-index';
+      indexLabel.textContent = 'Игра ' + (idx + 1);
+      block.appendChild(indexLabel);
+
+      var grid = document.createElement('div');
+      grid.className = 'form-grid';
+
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Каркассон';
+      nameInput.value = g.name;
+      nameInput.addEventListener('input', function () { g.name = nameInput.value; });
+      grid.appendChild(makeLabeledField('Название игры', nameInput, true));
+
+      var genreWrap = document.createElement('div');
+      genreWrap.className = 'field field-wide';
+      var genreSpan = document.createElement('span');
+      genreSpan.textContent = 'Жанр (можно несколько)';
+      genreWrap.appendChild(genreSpan);
+      var genreGroup = document.createElement('div');
+      genreGroup.className = 'pillrow';
+      GENRE_OPTIONS.forEach(function (opt) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip' + (g.genres.indexOf(opt) !== -1 ? ' active' : '');
+        chip.textContent = opt;
+        chip.addEventListener('click', function () {
+          var i = g.genres.indexOf(opt);
+          if (i === -1) g.genres.push(opt); else g.genres.splice(i, 1);
+          renderEventGames();
+        });
+        genreGroup.appendChild(chip);
+      });
+      genreWrap.appendChild(genreGroup);
+      grid.appendChild(genreWrap);
+
+      var diffSelect = document.createElement('select');
+      [['', 'не указано'], ['Лёгкая', 'Лёгкая'], ['Средняя', 'Средняя'], ['Сложная', 'Сложная']].forEach(function (pair) {
+        var opt = document.createElement('option');
+        opt.value = pair[0];
+        opt.textContent = pair[1];
+        if (g.difficulty === pair[0]) opt.selected = true;
+        diffSelect.appendChild(opt);
+      });
+      diffSelect.addEventListener('change', function () { g.difficulty = diffSelect.value; });
+      grid.appendChild(makeLabeledField('Сложность', diffSelect));
+
+      var durInput = document.createElement('input');
+      durInput.type = 'number';
+      durInput.min = '1';
+      durInput.placeholder = '120';
+      durInput.value = g.maxDuration || '';
+      durInput.addEventListener('input', function () { g.maxDuration = durInput.value; });
+      grid.appendChild(makeLabeledField('Макс. время игры, мин', durInput));
+
+      var settingInput = document.createElement('input');
+      settingInput.type = 'text';
+      settingInput.placeholder = 'фэнтези, космос, детектив...';
+      settingInput.value = g.setting;
+      settingInput.addEventListener('input', function () { g.setting = settingInput.value; });
+      grid.appendChild(makeLabeledField('Сеттинг', settingInput, true));
+
+      var teseraInput = document.createElement('input');
+      teseraInput.type = 'url';
+      teseraInput.placeholder = 'https://tesera.ru/game/... (необязательно)';
+      teseraInput.value = g.teseraUrl;
+      teseraInput.addEventListener('input', function () { g.teseraUrl = teseraInput.value; });
+      grid.appendChild(makeLabeledField('Ссылка на Тесеру', teseraInput));
+
+      var bggInput = document.createElement('input');
+      bggInput.type = 'url';
+      bggInput.placeholder = 'https://boardgamegeek.com/boardgame/... (необязательно)';
+      bggInput.value = g.bggUrl;
+      bggInput.addEventListener('input', function () { g.bggUrl = bggInput.value; });
+      grid.appendChild(makeLabeledField('Ссылка на BGG', bggInput));
+
+      var imageInput = document.createElement('input');
+      imageInput.type = 'url';
+      imageInput.placeholder = 'https://... (необязательно)';
+      imageInput.value = g.imageUrl;
+      imageInput.addEventListener('input', function () { g.imageUrl = imageInput.value; });
+      grid.appendChild(makeLabeledField('Ссылка на картинку', imageInput, true));
+
+      block.appendChild(grid);
+      wrap.appendChild(block);
+    });
+  }
+
+  document.getElementById('addEventGameBtn').addEventListener('click', function () {
+    eventGamesState.push({ name: '', genres: [], difficulty: '', maxDuration: '', setting: '', teseraUrl: '', bggUrl: '', imageUrl: '' });
+    renderEventGames();
+  });
+
   function setType(type) {
     currentType = type;
     document.querySelectorAll('#typeToggle .chip').forEach(function (btn) {
@@ -77,6 +204,7 @@
     } else {
       document.getElementById('fClosedParticipantsWrap').hidden = !document.getElementById('fClosed').checked;
     }
+    document.getElementById('eventGamesSection').hidden = !isEvent;
 
     var label = document.getElementById('fGameLabel');
     var input = document.getElementById('fGame');
@@ -167,6 +295,9 @@
       lines.push('📅 ' + fmtDate(ev.date) + (ev.time ? ', ' + ev.time : ''));
       lines.push('📍 ' + ev.city + (ev.place ? ' — ' + ev.place : ''));
       if (ev.organizer) lines.push('👤 Организатор: ' + ev.organizer);
+      if (ev.games && ev.games.length) {
+        lines.push('🎲 Игры: ' + ev.games.map(function (g) { return g.game; }).join(', '));
+      }
       lines.push('');
       lines.push('Подробнее: ' + link);
       return lines.join('\n');
@@ -225,6 +356,25 @@
     }).filter(Boolean);
   }
 
+  // отбрасываем блоки без названия -- пустой блок просто игнорируется, ничего вписывать
+  // не обязательно (весь список прикреплённых игр опционален для «Событие»)
+  function collectEventGames() {
+    return eventGamesState
+      .filter(function (g) { return g.name && g.name.trim(); })
+      .map(function (g) {
+        return {
+          game: g.name.trim(),
+          format: g.genres.join(', '),
+          difficulty: g.difficulty,
+          maxDuration: g.maxDuration ? Number(g.maxDuration) : null,
+          setting: g.setting.trim(),
+          teseraUrl: g.teseraUrl.trim(),
+          bggUrl: g.bggUrl.trim(),
+          imageUrl: g.imageUrl.trim()
+        };
+      });
+  }
+
   function collectFormValues() {
     var cityRaw = document.getElementById('fCity').value;
     var city = cityRaw === 'Другой' ? document.getElementById('fCityOther').value.trim() : cityRaw;
@@ -248,7 +398,8 @@
       note: document.getElementById('fNote').value.trim(),
       isClosed: document.getElementById('fClosed').checked,
       closedParticipants: parseClosedParticipants(),
-      eventType: currentType
+      eventType: currentType,
+      games: currentType === 'event' ? collectEventGames() : []
     };
   }
 
@@ -281,7 +432,7 @@
       difficulty: ev.difficulty, maxDuration: ev.maxDuration, setting: ev.setting,
       imageUrl: ev.imageUrl, teseraUrl: ev.teseraUrl, bggUrl: ev.bggUrl,
       isClosed: ev.isClosed, closedParticipants: ev.closedParticipants,
-      eventType: ev.eventType
+      eventType: ev.eventType, games: ev.games
     }).then(function (res) {
       nowBtn.disabled = false;
       scheduleBtn.disabled = false;
@@ -360,6 +511,8 @@
     document.getElementById('closedWarning').hidden = true;
     document.getElementById('fClosedParticipantsWrap').hidden = true;
     selectedGenres = [];
+    eventGamesState = [];
+    renderEventGames();
     setType('game');
     renderWhoAmI();
     loadSuggestions();

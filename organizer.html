@@ -20,6 +20,12 @@
     <p class="lead md" id="pageLead">заполните форму — мероприятие сразу появится на сайте и в таблице, а внизу получите готовый текст поста для вашего чата.</p>
   </div>
 
+  <nav class="top-nav pillrow" aria-label="Разделы">
+    <a class="chip active" href="index.html">Календарь</a>
+    <a class="chip" href="requests.html">Приём заявок</a>
+    <a class="chip" href="info.html">Важная информация</a>
+  </nav>
+
   <p class="cap mut3 footer-note back-link"><a href="index.html" style="color:inherit">← ко всем мероприятиям</a></p>
 
   <div class="pillrow" id="typeToggle" style="margin-bottom:18px">
@@ -121,6 +127,12 @@
         <textarea id="fClosedParticipants" rows="4" placeholder="Иван Иванов, ivan.ivanov@beeline.ru"></textarea>
         <span class="field-hint">По одному участнику на строку: имя, запятая, корпоративная почта</span>
       </label>
+      <div class="field field-wide field-event-only" id="eventGamesSection" hidden>
+        <span>Настольные игры на событии (необязательно)</span>
+        <p class="field-hint">Если на событии будут играть в конкретные игры — добавьте их сюда, у каждой те же поля, что и в обычном анонсе игры.</p>
+        <div class="event-games-wrap" id="eventGamesList"></div>
+        <button class="btn-ghost" id="addEventGameBtn" type="button" style="margin-top:10px">+ добавить игру</button>
+      </div>
     </div>
     <div class="result-actions">
       <button class="btn-primary" id="submitNowBtn" type="submit">Опубликовать сейчас</button>

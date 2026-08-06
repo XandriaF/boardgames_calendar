@@ -560,7 +560,11 @@ async function identifyVia(doc, name, email, pin) {
     method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({
       action: 'createEvent', eventType: 'event', date: '2026-12-05', time: '19:00', city: 'Москва',
-      organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', game: 'Пятничные посиделки клуба', place: 'Клубик'
+      organizer: 'Даша', organizerEmail: 'dasha@beeline.ru', game: 'Пятничные посиделки клуба', place: 'Клубик',
+      games: [
+        { game: 'Каркассон', format: 'Семейная', difficulty: 'Средняя', maxDuration: 45 },
+        { game: 'Манчкин' }
+      ]
     })
   }).then(r => r.json());
   if (!ceForEvent.ok) throw new Error('setup: failed to create the dedicated "событие" test event');
@@ -589,6 +593,26 @@ async function identifyVia(doc, name, email, pin) {
   // where/when/city still render normally for an event
   if (!eventCard.querySelector('.card-meta').textContent.includes('Клубик')) throw new Error('«событие» card should still show "где"');
   console.log('PASS: «событие» card still shows место/дата/город like a normal card');
+
+  // attached board games (optional, per-event) render as their own mini-rows with tags
+  const eventGamesBlock = eventCard.querySelector('.card-event-games');
+  if (!eventGamesBlock) throw new Error('«событие» with attached games should render a .card-event-games block');
+  const attachedGameRows = eventGamesBlock.querySelectorAll('.card-event-game');
+  if (attachedGameRows.length !== 2) throw new Error('expected 2 attached games rendered, got: ' + attachedGameRows.length);
+  const attachedNames = Array.from(attachedGameRows).map(r => r.querySelector('.n').textContent);
+  if (!attachedNames.includes('Каркассон') || !attachedNames.includes('Манчкин')) {
+    throw new Error('attached game names wrong: ' + attachedNames);
+  }
+  const carcassonneRow = Array.from(attachedGameRows).find(r => r.querySelector('.n').textContent === 'Каркассон');
+  const carcassonneTags = Array.from(carcassonneRow.querySelectorAll('.tag')).map(t => t.textContent);
+  if (!carcassonneTags.includes('Семейная') || !carcassonneTags.includes('Средняя') || !carcassonneTags.includes('~45 мин')) {
+    throw new Error('attached game (Каркассон) tags wrong: ' + carcassonneTags);
+  }
+  console.log('PASS: «событие» card renders its attached games with names and жанр/сложность/время tags ->', attachedNames);
+
+  const munchkinRow = Array.from(attachedGameRows).find(r => r.querySelector('.n').textContent === 'Манчкин');
+  if (munchkinRow.querySelector('.card-tags')) throw new Error('an attached game with no optional fields should render no tags row at all');
+  console.log('PASS: an attached game with only a name renders cleanly, no stray tags/links');
 
   console.log('\nALL TESTS PASSED');
   process.exit(0);

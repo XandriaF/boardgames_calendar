@@ -14,6 +14,12 @@ var SHEET_EVENTS = 'Мероприятия';
 var SHEET_SIGNUPS = 'Записи';
 var SHEET_CALENDAR = 'Календарь';
 var SHEET_ACCOUNTS = 'Аккаунты';
+// «Приём заявок» -- список настольных игр, которые хотели бы видеть в офисах: каталог
+// (SHEET_REQUESTS) заполняется ТОЛЬКО вручную в таблице, а голоса (по одному плюсику на
+// игру на человека, игр можно поддержать сколько угодно) пишутся событийно в SHEET_VOTES,
+// тем же паттерном, что и «Записи» -- по последней строке на (игра,email) побеждает статус.
+var SHEET_REQUESTS = 'Заявки';
+var SHEET_VOTES = 'Заявки_голоса';
 var TIMEZONE = 'Europe/Moscow';
 
 // Статусы, которые вообще показываются на публичном сайте
@@ -61,6 +67,10 @@ function doGet(e) {
       if (!email2) return jsonOutput({ ok: false, error: 'email required' });
       return jsonOutput({ ok: true, registered: getMyRegistrations(email2) });
     }
+    if (action === 'requests') {
+      var email3 = normalizeEmail((e.parameter && e.parameter.email) || '');
+      return jsonOutput({ ok: true, requests: getRequestsList(email3) });
+    }
     return jsonOutput({ ok: false, error: 'unknown action' });
   } catch (err) {
     return jsonOutput({ ok: false, error: String(err) });
@@ -92,6 +102,12 @@ function doPost(e) {
     }
     if (action === 'adjustReserved') {
       return jsonOutput(handleAdjustReserved(body));
+    }
+    if (action === 'vote') {
+      return jsonOutput(handleVote(body));
+    }
+    if (action === 'unvote') {
+      return jsonOutput(handleUnvote(body));
     }
     return jsonOutput({ ok: false, error: 'unknown action' });
   } catch (err) {
@@ -139,6 +155,9 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
     // «Тип»: Игра (полный анонс с записью) или Событие (только описание/где/когда, без записи
     // и без счётчика мест). Пусто = Игра, для обратной совместимости со старыми строками.
     var type = String(row[19] || '').trim() === 'Событие' ? 'event' : 'game';
+    // «Событие» может опционально нести список настольных игр, которые там будут -- каждая
+    // со своим набором полей, теми же, что и у обычного анонса игры (см. serializeEventGames)
+    var games = parseEventGames(row[20]);
 
     if (!date || !game) continue;
 
@@ -184,6 +203,7 @@ function getPublicEvents(signups, viewerEmail, hasAmbassadorAccess) {
       status: status,
       isClosed: isClosed,
       type: type,
+      games: games,
       note: note || '',
       difficulty: difficulty || '',
       maxDuration: maxDuration ? Number(maxDuration) : null,
@@ -233,6 +253,8 @@ function handleSignup(body) {
   // «закрытое» мероприятие -- самостоятельная запись на сайте недоступна, участников
   // вносит только организатор (списком при создании)
   if (eventInfo.isClosed) return { ok: false, error: 'closed' };
+  // «Событие» -- вообще без записи/мест, это просто отметка на сайте
+  if (eventInfo.type === 'event') return { ok: false, error: 'not_a_game' };
 
   var signups = getAllSignupStates();
   var key = eventKey(date, time, game);
@@ -278,6 +300,7 @@ function handleInterest(body) {
 
   var eventInfo = findEvent(date, time, game);
   if (eventInfo && eventInfo.isClosed) return { ok: false, error: 'closed' };
+  if (eventInfo && eventInfo.type === 'event') return { ok: false, error: 'not_a_game' };
 
   var key = eventKey(date, time, game);
   var signups = getAllSignupStates();
@@ -336,6 +359,16 @@ function handleCreateEvent(body) {
     imageUrl = fetchBggImage(bggUrl);
   }
 
+  // «Событие» может опционально нести список настольных игр, которые там будут -- те же
+  // поля, что и у обычного анонса игры (жанр/сложность/время/сеттинг/тесера/bgg/картинка),
+  // только не привязаны к записи/местам. Для типа «Игра» этот список игнорируется --
+  // основная игра уже описана самими полями формы выше.
+  var eventGames = eventType === 'event' && Array.isArray(body.games) ? body.games : [];
+  eventGames.forEach(function (g) {
+    if (g && !g.imageUrl && g.bggUrl) g.imageUrl = fetchBggImage(g.bggUrl);
+  });
+  var gamesSerialized = serializeEventGames(eventGames);
+
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EVENTS);
   sheet.appendRow([
     parseISODate(date),
@@ -357,7 +390,8 @@ function handleCreateEvent(body) {
     organizerEmail,
     isClosed,
     0, // Занято организатором -- счётчик мест без имени/почты, изначально 0
-    eventTypeLabel
+    eventTypeLabel,
+    gamesSerialized
   ]);
   // force the «Время» column to stay plain text -- otherwise Sheets can silently
   // auto-convert a value like "14:30" into a Time serial (see formatTimeVal above)
@@ -492,7 +526,8 @@ function findEvent(date, time, game) {
       return {
         maxParticipants: row[7] ? Number(row[7]) : null,
         status: row[8],
-        isClosed: isClosedVal(row[17])
+        isClosed: isClosedVal(row[17]),
+        type: String(row[19] || '').trim() === 'Событие' ? 'event' : 'game'
       };
     }
   }
@@ -535,6 +570,148 @@ function appendSignupRow(date, time, game, name, email, status, guests) {
 
 function eventKey(dateStr, time, game) {
   return dateStr + '|' + (time || '') + '|' + game;
+}
+
+// ---------- «Событие»: опциональный список прикреплённых настольных игр ----------
+//
+// Хранится в одной ячейке (столбец U «Игры события» на листе «Мероприятия») как
+// человекочитаемый текст -- по одной игре на строку, поля внутри строки разделены «||»,
+// в том же порядке, что и обычные поля анонса игры. Так это остаётся и вручную
+// редактируемым прямо в таблице, и достаточно структурированным, чтобы сайт разобрал
+// жанр/сложность/ссылки отдельно для каждой прикреплённой игры.
+// Формат строки: Название||Жанр||Сложность||Макс.время||Сеттинг||Тесера||BGG||Картинка
+
+function serializeEventGames(games) {
+  return (games || []).map(function (g) {
+    var name = capitalizeFirst(String((g && g.game) || '').trim());
+    if (!name) return null;
+    var format = String((g && g.format) || '').trim();
+    var difficulty = String((g && g.difficulty) || '').trim();
+    var maxDuration = (g && g.maxDuration) ? Number(g.maxDuration) : '';
+    var setting = String((g && g.setting) || '').trim();
+    var teseraUrl = String((g && g.teseraUrl) || '').trim();
+    var bggUrl = String((g && g.bggUrl) || '').trim();
+    var imageUrl = String((g && g.imageUrl) || '').trim();
+    return [name, format, difficulty, maxDuration, setting, teseraUrl, bggUrl, imageUrl].join('||');
+  }).filter(Boolean).join('\n');
+}
+
+function parseEventGames(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return [];
+  return text.split('\n').map(function (line) {
+    var parts = line.split('||');
+    var name = (parts[0] || '').trim();
+    if (!name) return null;
+    return {
+      game: capitalizeFirst(name),
+      format: (parts[1] || '').trim(),
+      difficulty: (parts[2] || '').trim(),
+      maxDuration: parts[3] ? Number(parts[3]) : null,
+      setting: (parts[4] || '').trim(),
+      teseraUrl: (parts[5] || '').trim(),
+      bggUrl: (parts[6] || '').trim(),
+      imageUrl: (parts[7] || '').trim()
+    };
+  }).filter(Boolean);
+}
+
+// ---------- «Приём заявок»: каталог игр (лист «Заявки») + голоса (лист «Заявки_голоса») ----------
+//
+// Каталог игр (Игра / Офис / Ссылка на BGG) пополняется ТОЛЬКО вручную в таблице -- сайт
+// его только читает и считает голоса. Голос -- по одному плюсику на игру на человека
+// (email), но игр можно поддержать сколько угодно; хранится событийно (как «Записи»):
+// каждое нажатие пишет новую строку {Игра, Имя, Email, Статус}, а активным считается
+// последний статус на пару (игра,email) -- «Голос» или «Отмена».
+
+function requestKey(game) {
+  return String(game || '').trim().toLowerCase();
+}
+
+// { "игра (в нижнем регистре)": [ {email, status}, ... latest per email ] }
+function getAllVoteStates() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_VOTES);
+  if (!sheet) return {};
+  var values = sheet.getDataRange().getValues();
+  var map = {};
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var game = row[1], email = normalizeEmail(row[3] || ''), status = row[4];
+    if (!game || !email) continue;
+    var key = requestKey(game);
+    if (!map[key]) map[key] = [];
+    map[key].push({ email: email, status: status });
+  }
+  var collapsed = {};
+  Object.keys(map).forEach(function (key) {
+    var byEmail = {};
+    map[key].forEach(function (entry) { byEmail[entry.email] = entry; }); // last write wins
+    collapsed[key] = Object.keys(byEmail).map(function (email) { return byEmail[email]; });
+  });
+  return collapsed;
+}
+
+function getRequestsList(viewerEmail) {
+  viewerEmail = normalizeEmail(viewerEmail || '');
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_REQUESTS);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getValues();
+  var votes = getAllVoteStates();
+  var list = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var game = String(row[0] || '').trim();
+    if (!game) continue;
+    var office = String(row[1] || '').trim();
+    var bggUrl = String(row[2] || '').trim();
+    var active = (votes[requestKey(game)] || []).filter(function (v) { return v.status === 'Голос'; });
+    var iVoted = !!viewerEmail && active.some(function (v) { return v.email === viewerEmail; });
+    list.push({
+      game: capitalizeFirst(game),
+      office: office,
+      bggUrl: bggUrl,
+      votes: active.length,
+      iVoted: iVoted
+    });
+  }
+  list.sort(function (a, b) {
+    if (b.votes !== a.votes) return b.votes - a.votes; // больше всего голосов -- выше
+    return a.game.localeCompare(b.game, 'ru');
+  });
+  return list;
+}
+
+function findRequestRow(sheet, game) {
+  var values = sheet.getDataRange().getValues();
+  var key = requestKey(game);
+  for (var r = 1; r < values.length; r++) {
+    if (requestKey(values[r][0] || '') === key) return r + 1;
+  }
+  return -1;
+}
+
+function handleVote(body) {
+  return setVoteStatus(body, 'Голос');
+}
+function handleUnvote(body) {
+  return setVoteStatus(body, 'Отмена');
+}
+
+function setVoteStatus(body, status) {
+  var game = String(body.game || '').trim();
+  var email = normalizeEmail(body.email || '');
+  var name = capitalizeFirst(String(body.name || '').trim());
+  if (!game || !email) return { ok: false, error: 'missing fields' };
+
+  var reqSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_REQUESTS);
+  if (!reqSheet || findRequestRow(reqSheet, game) === -1) return { ok: false, error: 'not found' };
+
+  var voteSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_VOTES);
+  voteSheet.appendRow([new Date(), game, name, email, status]);
+
+  var votes = getAllVoteStates();
+  var active = (votes[requestKey(game)] || []).filter(function (v) { return v.status === 'Голос'; });
+  return { ok: true, votes: active.length, iVoted: status === 'Голос' };
 }
 
 // Google Sheets sometimes auto-detects a plain "14:30" string written into the «Время»

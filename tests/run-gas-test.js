@@ -11,24 +11,26 @@ const code = fs.readFileSync(CODE_PATH, 'utf8');
 //              Сложность, Макс. время игры, Тесера, BGG, Сеттинг, Картинка, Email организатора, Закрытое,
 //              Занято организатором, Тип
 const eventsRows = [
-  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое','Занято организатором','Тип'],
-  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false, 0, 'Игра'],
-  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'],
-  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false, 0, 'Игра'],
-  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'], // should be hidden
+  ['Дата','Время','Город','Жанр','Игра','Место','Организатор','Макс. участников','Статус','Комментарий','Сложность','Макс. время игры','Тесера','BGG','Сеттинг','Картинка','Email организатора','Закрытое','Занято организатором','Тип','Игры события'],
+  [new Date('2026-08-07T00:00:00'), '18:00', 'Москва', 'Стратегия, Евро', 'Таверна Красный дракон', 'Клубик', 'Даша', 2, 'Набор открыт', '', 'Средняя', 90, 'https://tesera.ru/game/tavern/', 'https://boardgamegeek.com/boardgame/tavern', 'фэнтези, таверна', 'https://example.com/tavern.jpg', 'dasha@beeline.ru', false, 0, 'Игра', ''],
+  [new Date('2026-08-08T00:00:00'), '12:20', 'Санкт-Петербург', 'НРИ', 'Брасс Бирмингем', 'МПК', 'Даша', '', 'Набрано', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра', ''],
+  [new Date('2026-08-04T00:00:00'), '', 'Москва', 'Стратегия', 'Descent', '', 'Влад', '', 'Отменено', '', '', '', '', '', '', '', 'vlad@beeline.ru', false, 0, 'Игра', ''],
+  [new Date('2026-08-20T00:00:00'), '', 'Москва', 'Стратегия', 'Нечто', '', 'Даша', '', 'Черновик', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра', ''], // should be hidden
   // simulates Google Sheets auto-converting a plain "14:59" string into a Time serial --
   // Apps Script reads that back as a Date anchored to the classic 1899-12-30 time-only epoch
-  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра'],
+  [new Date('2026-09-20T00:00:00'), new Date(1899, 11, 30, 14, 59, 43), 'Москва', 'Евро', 'Тест Время-Баг', 'ШК', 'Даша', 4, 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Игра', ''],
   // scheduled/unpublished -- only visible to its creator (olya@beeline.ru) or an ambassador,
   // not in the general public list
-  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false, 0, 'Игра'],
+  [new Date('2026-10-01T00:00:00'), '19:00', 'Москва', 'Абстрактная', 'Секретный проект', '', 'Оля', '', 'Запланировано', '', '', '', '', '', '', '', 'olya@beeline.ru', false, 0, 'Игра', ''],
   // closed/private: publicly-statused but hidden from the general grid -- visible only to
   // its organizer, ambassadors, or its (creation-time) participants
-  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true, 0, 'Игра'],
+  [new Date('2026-10-10T00:00:00'), '19:00', 'Москва', 'Кооперативная', 'Приватная встреча', '', 'Настя', '', 'Набор открыт', '', '', '', '', '', '', '', 'nastya2@beeline.ru', true, 0, 'Игра', ''],
   // has 2 seats already manually reserved (organizer marked them via +/-, no name/email)
-  [new Date('2026-10-15T00:00:00'), '18:00', 'Москва', 'Пати', 'Мафия', '', 'Витя', 5, 'Набор открыт', '', '', '', '', '', '', '', 'vitya3@beeline.ru', false, 2, 'Игра'],
-  // «Событие» -- просто отметка (описание/где/когда/город), без записи; колонка Т = "Событие"
-  [new Date('2026-10-25T00:00:00'), '19:00', 'Москва', '', 'Пятничные посиделки клуба', 'Клубик', 'Даша', '', 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Событие'],
+  [new Date('2026-10-15T00:00:00'), '18:00', 'Москва', 'Пати', 'Мафия', '', 'Витя', 5, 'Набор открыт', '', '', '', '', '', '', '', 'vitya3@beeline.ru', false, 2, 'Игра', ''],
+  // «Событие» -- просто отметка (описание/где/когда/город), без записи; колонка Т = "Событие",
+  // колонка U несёт 2 прикреплённые игры (хвостом, как если бы вписали руками в таблицу)
+  [new Date('2026-10-25T00:00:00'), '19:00', 'Москва', '', 'Пятничные посиделки клуба', 'Клубик', 'Даша', '', 'Набор открыт', '', '', '', '', '', '', '', 'dasha@beeline.ru', false, 0, 'Событие',
+    'Каркассон||Семейная||Средняя||45||||||https://boardgamegeek.com/boardgame/822||\nМанчкин||||||||||||||'],
 ];
 
 // Записи: Timestamp, Дата, Время, Игра, Имя, Корп.почта, Статус, Гости
@@ -43,6 +45,19 @@ let signupRows = [
 // никогда через doGet/doPost
 let accountRows = [
   ['Email', 'Имя', 'PIN', 'Роль', 'Дата регистрации'],
+];
+
+// Заявки: Игра, Офис, Ссылка на BGG -- пополняется ТОЛЬКО вручную, сайт только читает
+let requestRows = [
+  ['Игра', 'Офис', 'Ссылка на BGG'],
+  ['Каркассон', 'Москва, Санкт-Петербург', 'https://boardgamegeek.com/boardgame/822/carcassonne'],
+  ['Манчкин', '', ''],
+];
+
+// Заявки_голоса: Timestamp, Игра, Имя, Email, Статус ("Голос"/"Отмена") -- событийный лог,
+// побеждает последний статус на пару (игра,email), как и «Записи»
+let voteRows = [
+  ['Timestamp', 'Игра', 'Имя', 'Email', 'Статус'],
 ];
 
 function makeSheetStub(rows) {
@@ -75,6 +90,8 @@ const sandbox = {
           if (name === 'Мероприятия') return makeSheetStub(eventsRows);
           if (name === 'Записи') return makeSheetStub(signupRows);
           if (name === 'Аккаунты') return makeSheetStub(accountRows);
+          if (name === 'Заявки') return makeSheetStub(requestRows);
+          if (name === 'Заявки_голоса') return makeSheetStub(voteRows);
           throw new Error('unknown sheet ' + name);
         }
       };
@@ -179,6 +196,17 @@ check('regular event defaults to type="game"', dracon0 && dracon0.type === 'game
 const fridayMeetup = r1.events.find(e => e.game === 'Пятничные посиделки клуба');
 check('«событие» fixture read from column T as type="event"', fridayMeetup && fridayMeetup.type === 'event');
 check('«событие» still carries где/когда/город like a normal event', fridayMeetup && fridayMeetup.place === 'Клубик' && fridayMeetup.city === 'Москва');
+check('«событие» games list parsed from column U (2 games)', fridayMeetup && fridayMeetup.games.length === 2);
+check('first attached game carries name/жанр/сложность/время/bgg parsed from the || format',
+  fridayMeetup && fridayMeetup.games[0].game === 'Каркассон' && fridayMeetup.games[0].format === 'Семейная' &&
+  fridayMeetup.games[0].difficulty === 'Средняя' && fridayMeetup.games[0].maxDuration === 45 &&
+  fridayMeetup.games[0].bggUrl === 'https://boardgamegeek.com/boardgame/822');
+check('second attached game with only a name parses cleanly, empty optional fields',
+  fridayMeetup && fridayMeetup.games[1].game === 'Манчкин' && fridayMeetup.games[1].format === '' &&
+  fridayMeetup.games[1].maxDuration === null);
+
+const draconNoGames = r1.events.find(e => e.game === 'Таверна Красный дракон');
+check('a regular "Игра" event has an empty games list', draconNoGames && Array.isArray(draconNoGames.games) && draconNoGames.games.length === 0);
 
 const mafia = r1.events.find(e => e.game === 'Мафия');
 check('event with 2 manually-reserved seats (no name/email) reflects that in participantsCount',
@@ -329,29 +357,54 @@ check('createEvent wrote organizerEmail into column Q', newRow[16] === 'olya@bee
 check('createEvent defaults isClosed to false in column R', newRow[17] === false);
 check('createEvent defaults reservedCount to 0 in column S', newRow[18] === 0);
 check('createEvent without eventType defaults to "Игра" in column T', newRow[19] === 'Игра');
+check('createEvent for type "Игра" leaves column U (Игры события) empty', newRow[20] === '');
 
 // ---- «Тип»: анонс события (eventType:'event') -- описание/где/когда/город only, no
-// signup concept; «закрытое» is forced off even if the client somehow still sent it
+// signup concept; «закрытое» is forced off even if the client somehow still sent it.
+// Also carries an optional list of attached board games (same fields as a normal
+// game announcement), including the BGG-cover-autofetch behaviour per attached game.
 const ceEvent = callDoPost({
   action: 'createEvent', date: '2026-09-18', time: '20:00', city: 'Москва', format: '',
   game: 'Субботник в офисе', place: 'Опен-спейс', organizer: 'Оля', organizerEmail: 'olya@beeline.ru',
-  eventType: 'event', isClosed: true, closedParticipants: [{ name: 'Кто-то', email: 'someone@beeline.ru' }]
+  eventType: 'event', isClosed: true, closedParticipants: [{ name: 'Кто-то', email: 'someone@beeline.ru' }],
+  games: [
+    { game: 'Игра с BGG', bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name', format: 'Евро', difficulty: 'Средняя' },
+    { game: 'Игра с картинкой', bggUrl: 'https://boardgamegeek.com/boardgame/999/some-game-name', imageUrl: 'https://example.com/manual2.jpg' },
+    { game: '   ' } // no real name -- must be dropped, not stored as a blank line
+  ]
 });
 check('createEvent with eventType:"event" ok', ceEvent.ok === true);
 const eventRow = eventsRows[eventsRows.length - 1];
 check('createEvent wrote "Событие" into column T', eventRow[19] === 'Событие');
 check('createEvent forces isClosed=false in column R for a «событие», even if the client sent isClosed:true', eventRow[17] === false);
+check('createEvent serialized exactly 2 games into column U (blank-name entry dropped)', eventRow[20].split('\n').length === 2);
 
 const rEventType = callDoGet({ action: 'events' });
 const createdEventType = rEventType.events.find(e => e.game === 'Субботник в офисе');
 check('newly created «событие» visible via doGet with type="event"', createdEventType && createdEventType.type === 'event');
 check('«событие» with isClosed forced off is publicly visible (not hidden like a closed event)', !!createdEventType);
+check('attached games round-trip through doGet (2 games, blank one dropped)', createdEventType && createdEventType.games.length === 2);
+check('attached game with only a bggUrl auto-fetched its cover image',
+  createdEventType && createdEventType.games[0].game === 'Игра с BGG' && createdEventType.games[0].imageUrl === 'https://cf.geekdo-images.com/mock/999.jpg');
+check('attached game with a manual imageUrl keeps it (not overwritten by BGG auto-fetch)',
+  createdEventType && createdEventType.games[1].imageUrl === 'https://example.com/manual2.jpg');
 
 // a "закрытое" participant list is meaningless once isClosed was forced to false for an
 // событие -- confirm no signup row was created for it either
 const rEventTypeParticipant = callDoGet({ action: 'events', email: 'someone@beeline.ru' });
 check('a closedParticipants entry is not auto-registered for a forced-open «событие»',
   !rEventTypeParticipant.registeredIds.includes(createdEventType && createdEventType.id));
+
+// createEvent for a plain "Игра" must ignore any "games" payload entirely -- the main
+// game is already the form's own fields, attaching a sub-list only makes sense for «событие»
+const ceGameIgnoresGames = callDoPost({
+  action: 'createEvent', date: '2026-09-19', time: '18:00', city: 'Москва', format: '',
+  game: 'Обычная игра с лишним games', place: '', organizer: 'Оля', organizerEmail: 'olya@beeline.ru',
+  games: [{ game: 'Должно быть проигнорировано' }]
+});
+check('createEvent for type "Игра" ignores a stray games payload', ceGameIgnoresGames.ok === true);
+const ignoredGamesRow = eventsRows[eventsRows.length - 1];
+check('column U stays empty for "Игра" even if games[] was sent', ignoredGamesRow[20] === '');
 
 // ---- BGG cover auto-fetch ----
 // no imageUrl given, but bggUrl points to a game the stubbed BGG API "knows" (id=999) --
@@ -617,6 +670,53 @@ check('adjustReserved with delta=0 rejected as a no-op/missing field', arMissing
 
 const arEventNotFound = callDoPost({ action: 'adjustReserved', date: '2099-01-01', time: '18:00', game: 'Не существует', email: 'vitya3@beeline.ru', delta: 1 });
 check('adjustReserved against a non-existent event rejected', arEventNotFound.ok === false && arEventNotFound.error === 'event not found');
+
+// ---- «Приём заявок»: каталог (лист «Заявки», только ручное пополнение) + голоса ----
+// 1 плюсик на игру на человека, но игр можно поддержать сколько угодно
+const rq1 = callDoGet({ action: 'requests' });
+check('doGet requests ok', rq1.ok === true);
+check('2 catalog games returned', rq1.requests.length === 2);
+check('anonymous viewer has iVoted=false everywhere, votes start at 0',
+  rq1.requests.every(r => r.iVoted === false && r.votes === 0));
+check('catalog carries office/bggUrl straight from the sheet',
+  rq1.requests.find(r => r.game === 'Каркассон').office === 'Москва, Санкт-Петербург' &&
+  rq1.requests.find(r => r.game === 'Каркассон').bggUrl === 'https://boardgamegeek.com/boardgame/822/carcassonne');
+
+const v1 = callDoPost({ action: 'vote', game: 'Каркассон', email: 'voter1@beeline.ru', name: 'Голосующий Один' });
+check('first vote for Каркассон ok, count=1', v1.ok === true && v1.votes === 1 && v1.iVoted === true);
+
+const v1Again = callDoPost({ action: 'vote', game: 'Каркассон', email: 'voter1@beeline.ru', name: 'Голосующий Один' });
+check('voting again for the same game just re-affirms (still 1 active voter, not double-counted)', v1Again.ok === true && v1Again.votes === 1);
+
+const v2 = callDoPost({ action: 'vote', game: 'Каркассон', email: 'voter2@beeline.ru', name: 'Голосующий Два' });
+check('a second, different person can also vote for the same game, count=2', v2.ok === true && v2.votes === 2);
+
+// same person voting for a DIFFERENT game too -- unlimited games per person, each with its own vote
+const v1Other = callDoPost({ action: 'vote', game: 'Манчкин', email: 'voter1@beeline.ru', name: 'Голосующий Один' });
+check('the same person can also vote for a different game (no cross-game exclusivity)', v1Other.ok === true && v1Other.votes === 1);
+
+const rq2 = callDoGet({ action: 'requests', email: 'voter1@beeline.ru' });
+const carcForVoter1 = rq2.requests.find(r => r.game === 'Каркассон');
+const munchkinForVoter1 = rq2.requests.find(r => r.game === 'Манчкин');
+check('voter1 sees iVoted=true for both games they voted for', carcForVoter1.iVoted === true && munchkinForVoter1.iVoted === true);
+check('requests list sorted by votes desc (Каркассон with 2 first)', rq2.requests[0].game === 'Каркассон');
+
+const rq3 = callDoGet({ action: 'requests', email: 'voter2@beeline.ru' });
+check('a different viewer only sees their own vote as iVoted (not Манчкин, which they never voted for)',
+  rq3.requests.find(r => r.game === 'Каркассон').iVoted === true && rq3.requests.find(r => r.game === 'Манчкин').iVoted === false);
+
+const unv1 = callDoPost({ action: 'unvote', game: 'Каркассон', email: 'voter1@beeline.ru', name: 'Голосующий Один' });
+check('unvote removes the vote, count back to 1', unv1.ok === true && unv1.votes === 1 && unv1.iVoted === false);
+
+const rq4 = callDoGet({ action: 'requests', email: 'voter1@beeline.ru' });
+check('after unvote, iVoted=false for voter1 on Каркассон', rq4.requests.find(r => r.game === 'Каркассон').iVoted === false);
+check('vote count reflects only the still-active voter (voter2)', rq4.requests.find(r => r.game === 'Каркассон').votes === 1);
+
+const voteMissingFields = callDoPost({ action: 'vote', game: '', email: 'voter1@beeline.ru' });
+check('vote with no game rejected', voteMissingFields.ok === false && voteMissingFields.error === 'missing fields');
+
+const voteUnknownGame = callDoPost({ action: 'vote', game: 'Игра, которой нет в каталоге', email: 'voter1@beeline.ru' });
+check('voting for a game not in the «Заявки» catalog is rejected', voteUnknownGame.ok === false && voteUnknownGame.error === 'not found');
 
 // ---- organizer deletes an event row directly in Google Sheets ----
 // (do this last -- it removes "Таверна Красный дракон" from the fixture, which earlier

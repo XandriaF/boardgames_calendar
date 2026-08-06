@@ -71,6 +71,62 @@ input { text-transform: none; }
 .accent { color: var(--brand); }
 .hero-sm { font-size: 34px; line-height: 40px; }
 
+/* ---------- top nav (tabs across pages) ---------- */
+.top-nav { margin-top: 18px; }
+.top-nav .chip { text-decoration: none; display: inline-block; }
+
+/* ---------- info page (community links) ---------- */
+.info-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+.info-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+  border-radius: var(--r-xl);
+  padding: 20px 24px;
+  text-decoration: none;
+  color: var(--t1);
+  transition: 0.15s;
+}
+.info-link:hover { box-shadow: 0 4px 18px rgba(32, 38, 50, 0.1); }
+.info-link .n { font-size: 17px; font-weight: 600; }
+.info-link .cap { margin-top: 3px; }
+.info-link .arrow { color: var(--t3); font-size: 20px; }
+
+/* ---------- requests page (game wishlist / voting) ---------- */
+.requests-table { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.requests-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--card);
+  border-radius: var(--r-xl);
+  padding: 18px 22px;
+  flex-wrap: wrap;
+}
+.requests-row .req-main { flex: 1; min-width: 180px; }
+.requests-row .req-game { font-size: 17px; font-weight: 600; }
+.requests-row .req-meta { font-size: 13px; color: var(--t2); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--t1);
+  border-radius: var(--r-pill);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.vote-btn:hover { border-color: var(--t3); }
+.vote-btn.active { background: var(--brand); border-color: var(--brand); color: var(--t1); }
+.vote-count { font-variant-numeric: tabular-nums; }
+
 /* ---------- organizer page ---------- */
 .wrap-narrow { max-width: 640px; }
 .back-link { margin: 16px 0 20px; }
@@ -103,6 +159,36 @@ input { text-transform: none; }
 @media (max-width: 640px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- attached games on an event (organizer form) ---------- */
+.event-games-wrap { display: flex; flex-direction: column; gap: 14px; }
+.event-game-block {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  position: relative;
+}
+.event-game-block .form-grid { gap: 12px 14px; }
+.event-game-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: none;
+  background: none;
+  color: var(--t2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+.event-game-remove:hover { color: var(--err); }
+.event-game-index { font-size: 12px; font-weight: 600; color: var(--t2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+
+/* ---------- attached games display on an event card (index.html) ---------- */
+.card-event-games { display: flex; flex-direction: column; gap: 8px; }
+.card-event-game { font-size: 13px; color: var(--t1); }
+.card-event-game .n { font-weight: 600; }
+.card-event-game .card-tags { margin-top: 4px; }
 
 /* ---------- stats ---------- */
 .stats-grid {

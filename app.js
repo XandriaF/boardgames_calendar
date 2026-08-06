@@ -326,6 +326,13 @@
       }
     }
 
+    // «Событие» может опционально нести список настольных игр, которые там будут --
+    // каждая со своими жанром/сложностью/ссылками, теми же полями, что и у обычного анонса
+    var eventGamesBlock = null;
+    if (isEventType && ev.games && ev.games.length) {
+      eventGamesBlock = renderEventGamesBlock(ev.games);
+    }
+
     var interestLine = null;
     if (!isEventType && ev.interestCount) {
       interestLine = document.createElement('div');
@@ -361,11 +368,64 @@
     card.appendChild(tags);
     card.appendChild(meta);
     if (links) card.appendChild(links);
+    if (eventGamesBlock) card.appendChild(eventGamesBlock);
     if (participants) card.appendChild(participants);
     if (interestLine) card.appendChild(interestLine);
     if (reservedRow) card.appendChild(reservedRow);
     if (actions.children.length) card.appendChild(actions);
     return card;
+  }
+
+  // список настольных игр, прикреплённых к «Событию» -- у каждой свои жанр/сложность/ссылки,
+  // те же поля, что и у обычного анонса игры (см. organizer.js/Code.gs serializeEventGames)
+  function renderEventGamesBlock(games) {
+    var wrap = document.createElement('div');
+    wrap.className = 'card-event-games';
+
+    var label = document.createElement('div');
+    label.className = 'cap mut';
+    label.textContent = '🎲 Игры на событии:';
+    wrap.appendChild(label);
+
+    games.forEach(function (g) {
+      var row = document.createElement('div');
+      row.className = 'card-event-game';
+
+      var name = document.createElement('span');
+      name.className = 'n';
+      name.textContent = capitalizeFirst(g.game);
+      row.appendChild(name);
+
+      var tagValues = [];
+      splitList(g.format).forEach(function (t) { tagValues.push(t); });
+      if (g.difficulty) tagValues.push(g.difficulty);
+      if (g.maxDuration) tagValues.push('~' + g.maxDuration + ' мин');
+      if (g.setting) splitList(g.setting).forEach(function (s) { tagValues.push(s); });
+
+      if (tagValues.length) {
+        var tagsRow = document.createElement('div');
+        tagsRow.className = 'card-tags';
+        tagValues.forEach(function (t) {
+          var tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = t;
+          tagsRow.appendChild(tag);
+        });
+        row.appendChild(tagsRow);
+      }
+
+      if (g.teseraUrl || g.bggUrl) {
+        var linksRow = document.createElement('div');
+        linksRow.className = 'card-links';
+        if (g.teseraUrl) linksRow.appendChild(externalLink('Тесера', g.teseraUrl));
+        if (g.bggUrl) linksRow.appendChild(externalLink('BGG', g.bggUrl));
+        row.appendChild(linksRow);
+      }
+
+      wrap.appendChild(row);
+    });
+
+    return wrap;
   }
 
   // счётчик +/- для организатора: помечает места как занятые без указания имени/почты

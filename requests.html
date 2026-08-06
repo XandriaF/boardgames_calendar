@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Приём заявок • билайн настолки</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23202632%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 fill=%22%23FFC800%22 text-anchor=%22middle%22 font-family=%22Arial%22>🎲</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="wrap wrap-narrow">
+
+  <div class="head">
+    <span class="tag">внутренний сервис · билайн</span>
+    <h1 class="hero hero-sm">приём <span class="accent">заявок</span></h1>
+    <p class="lead md">какие настольные игры хочется видеть в офисах — поставьте плюсик понравившимся, чем больше голосов, тем выше шансы, что игру купят. На игру можно поставить только один плюсик, а вот поддержать можно сколько угодно разных игр.</p>
+  </div>
+
+  <nav class="top-nav pillrow" aria-label="Разделы">
+    <a class="chip" href="index.html">Календарь</a>
+    <a class="chip active" href="requests.html">Приём заявок</a>
+    <a class="chip" href="info.html">Важная информация</a>
+  </nav>
+
+  <div class="tabs" id="filters" style="margin-top:12px">
+    <div class="filter-block id-group">
+      <span class="filter-label">Это вы</span>
+      <div class="pillrow">
+        <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="status" class="note" hidden></section>
+
+  <section class="requests-table" id="requestsList">
+    <div class="empty" id="loadingState">Загружаем список игр…</div>
+  </section>
+
+  <p class="cap mut3 footer-note">Список игр пополняется вручную амбассадорами — если не нашли нужную игру, напишите на вкладке «Важная информация».</p>
+
+</div>
+
+<!-- Модалка: кто вы (имя+почта+код), нужна перед голосованием -->
+<div class="modal-overlay" id="whoAmIOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" data-close>×</button>
+    <h3>Это вы?</h3>
+    <p class="modal-hint">Имя и почта нужны, чтобы каждый мог поставить только один плюсик одной и той же игре. Почта и код нужны, чтобы никто другой не мог проголосовать от вашего имени.</p>
+    <label class="field">
+      <span>Имя</span>
+      <input type="text" id="inputName" placeholder="Даша Иванова" autocomplete="name">
+    </label>
+    <label class="field">
+      <span>Корпоративная почта</span>
+      <input type="email" id="inputEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
+    </label>
+    <label class="field">
+      <span>Код (4 цифры)</span>
+      <input type="text" id="inputPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <span class="field-hint">Заходите с этой почтой впервые — просто придумайте код, он закрепится за вами. Почта уже знакома сайту — введите тот же код, что и в прошлый раз.</span>
+    </label>
+    <button class="btn-primary" id="saveWhoAmI" type="button">Сохранить</button>
+    <p class="modal-error" id="whoAmIError" hidden></p>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="requests.js"></script>
+</body>
+</html>
