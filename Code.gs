@@ -802,6 +802,7 @@ function handleIdentify(body) {
   if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'invalid_pin' };
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ACCOUNTS);
+  if (!sheet) return { ok: false, error: 'accounts_sheet_missing' };
   var rowIndex = findAccountRow(sheet, email);
 
   if (rowIndex === -1) {

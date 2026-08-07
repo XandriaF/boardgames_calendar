@@ -674,6 +674,8 @@
             errEl.textContent = 'Неверный код для этой почты. Если не помните его — напишите амбассадору Дарье: ddkolesnik@beeline.ru';
           } else if (res.error === 'invalid_pin') {
             errEl.textContent = 'Код должен состоять из 4 цифр';
+          } else if (res.error === 'accounts_sheet_missing') {
+            errEl.textContent = 'В таблице не найден лист «Аккаунты» — напишите Дарье: ddkolesnik@beeline.ru';
           } else {
             errEl.textContent = 'Не получилось сохранить, попробуйте ещё раз';
           }
