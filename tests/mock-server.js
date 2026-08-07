@@ -35,10 +35,18 @@ let accounts = {};
 // «Приём заявок» -- каталог игр (лист «Заявки», пополняется только вручную) + событийный
 // лог голосов (лист «Заявки_голоса»), один плюсик на игру на человека, игр -- сколько угодно
 const requests = [
-  { game: 'Каркассон', office: 'Москва (локер 5, 2 этаж); Санкт-Петербург', bgaAvailable: true },
-  { game: 'Манчкин', office: '', bgaAvailable: false },
+  { game: 'Каркассон', office: 'Москва (локер 5, 2 этаж); Санкт-Петербург', bgaAvailable: true, hosts: 'Даша (Москва); Игорь (Санкт-Петербург)' },
+  { game: 'Манчкин', office: '', bgaAvailable: false, hosts: '' },
+  // третья игра с именем на «А» -- нужна, чтобы сортировки «по популярности» (Каркассон
+  // выше за счёт голосов ниже) и «по алфавиту» (Активити первая) реально отличались друг
+  // от друга в тестах
+  { game: 'Активити', office: 'Астрахань (ул. Победы, 41)', bgaAvailable: false, hosts: '' },
 ];
-let votes = [];
+// pre-seed 2 votes for Каркассон so votes-desc order differs from alphabetical order
+let votes = [
+  { game: 'Каркассон', name: 'Голосующий А', email: 'seed.voter.a@beeline.ru', status: 'Голос' },
+  { game: 'Каркассон', name: 'Голосующий Б', email: 'seed.voter.b@beeline.ru', status: 'Голос' },
+];
 
 // pre-seed the closed event's fixture with one participant so visibility tests have
 // something to assert against
@@ -90,6 +98,7 @@ function visibleRequests(viewerEmail) {
       game: capitalizeFirst(req.game),
       office: req.office || '',
       bgaAvailable: !!req.bgaAvailable,
+      hosts: req.hosts || '',
       votes: active.length,
       iVoted: !!viewerEmail && active.some(v => v.email === viewerEmail)
     };

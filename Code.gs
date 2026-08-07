@@ -665,12 +665,16 @@ function getRequestsList(viewerEmail) {
     var office = String(row[1] || '').trim();
     // колонка «Возможность сыграть на BGA» -- чекбокс, ставится только вручную в таблице
     var bgaAvailable = row[2] === true;
+    // колонка «Амбассадор(ы), кто может провести» -- свободный текст, несколько через ";",
+    // тот же формат, что и «Доступность в офисе»
+    var hosts = String(row[3] || '').trim();
     var active = (votes[requestKey(game)] || []).filter(function (v) { return v.status === 'Голос'; });
     var iVoted = !!viewerEmail && active.some(function (v) { return v.email === viewerEmail; });
     list.push({
       game: capitalizeFirst(game),
       office: office,
       bgaAvailable: bgaAvailable,
+      hosts: hosts,
       votes: active.length,
       iVoted: iVoted
     });

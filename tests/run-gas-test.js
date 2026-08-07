@@ -47,12 +47,12 @@ let accountRows = [
   ['Email', 'Имя', 'PIN', 'Роль', 'Дата регистрации'],
 ];
 
-// Заявки: Игра, Доступность в офисе, Возможность сыграть на BGA (чекбокс) -- пополняется
-// ТОЛЬКО вручную, сайт только читает
+// Заявки: Игра, Доступность в офисе, Возможность сыграть на BGA (чекбокс), Амбассадор(ы) --
+// пополняется ТОЛЬКО вручную, сайт только читает
 let requestRows = [
-  ['Игра', 'Доступность в офисе', 'Возможность сыграть на BGA'],
-  ['Каркассон', 'Москва (локер 5, 2 этаж); Санкт-Петербург', true],
-  ['Манчкин', '', false],
+  ['Игра', 'Доступность в офисе', 'Возможность сыграть на BGA', 'Амбассадор(ы), кто может провести'],
+  ['Каркассон', 'Москва (локер 5, 2 этаж); Санкт-Петербург', true, 'Даша (Москва); Игорь (Санкт-Петербург)'],
+  ['Манчкин', '', false, ''],
 ];
 
 // Заявки_голоса: Timestamp, Игра, Имя, Email, Статус ("Голос"/"Отмена") -- событийный лог,
@@ -679,10 +679,12 @@ check('doGet requests ok', rq1.ok === true);
 check('2 catalog games returned', rq1.requests.length === 2);
 check('anonymous viewer has iVoted=false everywhere, votes start at 0',
   rq1.requests.every(r => r.iVoted === false && r.votes === 0));
-check('catalog carries office/bgaAvailable straight from the sheet',
+check('catalog carries office/bgaAvailable/hosts straight from the sheet',
   rq1.requests.find(r => r.game === 'Каркассон').office === 'Москва (локер 5, 2 этаж); Санкт-Петербург' &&
   rq1.requests.find(r => r.game === 'Каркассон').bgaAvailable === true &&
-  rq1.requests.find(r => r.game === 'Манчкин').bgaAvailable === false);
+  rq1.requests.find(r => r.game === 'Каркассон').hosts === 'Даша (Москва); Игорь (Санкт-Петербург)' &&
+  rq1.requests.find(r => r.game === 'Манчкин').bgaAvailable === false &&
+  rq1.requests.find(r => r.game === 'Манчкин').hosts === '');
 
 const v1 = callDoPost({ action: 'vote', game: 'Каркассон', email: 'voter1@beeline.ru', name: 'Голосующий Один' });
 check('first vote for Каркассон ok, count=1', v1.ok === true && v1.votes === 1 && v1.iVoted === true);

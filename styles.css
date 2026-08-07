@@ -123,19 +123,104 @@ input { text-transform: none; }
 .mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
 
 /* ---------- requests page (game wishlist / voting) ---------- */
-.requests-table { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-.requests-row {
+.whoami-banner {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   background: var(--card);
   border-radius: var(--r-xl);
-  padding: 18px 22px;
-  flex-wrap: wrap;
+  padding: 16px 22px;
+  margin-top: 20px;
 }
-.requests-row .req-main { flex: 1; min-width: 180px; }
-.requests-row .req-game { font-size: 17px; font-weight: 600; }
-.requests-row .req-meta { font-size: 13px; color: var(--t2); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+.whoami-banner .filter-label { margin: 0; }
+
+.select-input {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 9px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  background: var(--card);
+  color: var(--t1);
+  cursor: pointer;
+}
+.select-input:focus { outline: none; border-color: var(--brand); }
+
+/* the "table" is a CSS grid on the outer container; both the head row and every data row
+   use display:contents so their cells become direct grid items and line up into columns --
+   this keeps markup simple (one wrapper per row) while still getting real column alignment */
+.requests-table {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.1fr) minmax(200px, 1.8fr) minmax(180px, 1.6fr) 84px auto;
+  column-gap: 18px;
+  margin-top: 20px;
+  align-items: center;
+}
+.requests-head { display: contents; }
+.requests-head > div {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--t2);
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border);
+}
+.requests-row { display: contents; }
+.req-cell { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.requests-row:last-child .req-cell { border-bottom: none; }
+.req-cell-label { display: none; }
+.req-game { font-size: 15px; font-weight: 600; }
+.req-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.req-office, .req-host {
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--t2);
+  border-radius: var(--r-pill);
+  padding: 5px 11px;
+  line-height: 1.4;
+}
+.req-chips-empty { font-size: 13px; color: var(--t3); }
+.req-bga {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 5px 11px;
+  display: inline-block;
+}
+.req-bga.is-yes { background: #E8F7EE; color: var(--ok); }
+.req-bga.is-no { color: var(--t3); font-weight: 400; }
+.req-cell-vote { text-align: right; }
+
+@media (max-width: 760px) {
+  .requests-head { display: none; }
+  .requests-table { display: flex; flex-direction: column; gap: 12px; }
+  .requests-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    background: var(--card);
+    border-radius: var(--r-xl);
+    padding: 18px 20px;
+  }
+  .req-cell { padding: 0; border-bottom: none; }
+  .req-cell-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--t3);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .req-cell-vote { text-align: left; margin-top: 4px; }
+  .req-cell-vote .vote-btn { width: 100%; justify-content: center; }
+}
+
 .vote-btn {
   display: inline-flex;
   align-items: center;

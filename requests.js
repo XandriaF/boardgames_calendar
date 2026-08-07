@@ -57,66 +57,133 @@
     el.hidden = false;
   }
 
+  // ---------- filtering / sorting (purely client-side over the already-fetched list --
+  // no need to hit the server again just to change the city filter or the sort order) ----------
+  function matchesCity(req, city) {
+    if (!city) return true;
+    var needle = city.toLowerCase();
+    return (req.office && req.office.toLowerCase().indexOf(needle) !== -1) ||
+      (req.hosts && req.hosts.toLowerCase().indexOf(needle) !== -1);
+  }
+
+  function getVisibleRequests() {
+    var city = document.getElementById('cityFilter').value;
+    var sort = document.getElementById('sortSelect').value;
+    var list = state.requests.filter(function (req) { return matchesCity(req, city); });
+    if (sort === 'az' || sort === 'za') {
+      list = list.slice().sort(function (a, b) {
+        return capitalizeFirst(a.game).localeCompare(capitalizeFirst(b.game), 'ru');
+      });
+      if (sort === 'za') list.reverse();
+    }
+    // sort === 'votes' -- keep the server order as-is (already sorted by votes desc)
+    return list;
+  }
+
   // ---------- rendering ----------
   function renderList() {
     var el = document.getElementById('requestsList');
-    el.innerHTML = '';
+    var head = document.getElementById('requestsHead');
+    Array.from(el.querySelectorAll('.requests-row, .empty')).forEach(function (n) { n.remove(); });
 
     if (!state.requests.length) {
-      var empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = 'Список пока пуст 🎲';
-      el.appendChild(empty);
+      head.hidden = true;
+      el.appendChild(makeEmpty('Список пока пуст 🎲'));
       return;
     }
 
-    state.requests.forEach(function (req) {
+    var visible = getVisibleRequests();
+    if (!visible.length) {
+      head.hidden = true;
+      el.appendChild(makeEmpty('Ничего не нашлось для этого города — попробуйте другой фильтр'));
+      return;
+    }
+
+    head.hidden = false;
+    visible.forEach(function (req) {
       el.appendChild(renderRow(req));
     });
+  }
+
+  function makeEmpty(text) {
+    var empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = text;
+    return empty;
+  }
+
+  // small mobile-only caption shown above a cell's value once the table collapses to
+  // stacked cards on narrow screens (see .req-cell-label in styles.css)
+  function cellLabel(text) {
+    var span = document.createElement('span');
+    span.className = 'req-cell-label';
+    span.textContent = text;
+    return span;
+  }
+
+  function renderChipList(items, emptyText, chipClass) {
+    var wrap = document.createElement('div');
+    wrap.className = 'req-chips';
+    if (items.length) {
+      items.forEach(function (t) {
+        var chip = document.createElement('span');
+        chip.className = chipClass;
+        chip.textContent = t;
+        wrap.appendChild(chip);
+      });
+    } else {
+      var none = document.createElement('span');
+      none.className = 'req-chips-empty';
+      none.textContent = emptyText;
+      wrap.appendChild(none);
+    }
+    return wrap;
   }
 
   function renderRow(req) {
     var row = document.createElement('div');
     row.className = 'requests-row';
 
-    var main = document.createElement('div');
-    main.className = 'req-main';
-
-    var name = document.createElement('div');
+    var gameCell = document.createElement('div');
+    gameCell.className = 'req-cell req-cell-game';
+    gameCell.appendChild(cellLabel('Игра'));
+    var name = document.createElement('span');
     name.className = 'req-game';
     name.textContent = capitalizeFirst(req.game);
-    main.appendChild(name);
+    gameCell.appendChild(name);
+    row.appendChild(gameCell);
 
-    var meta = document.createElement('div');
-    meta.className = 'req-meta';
-    if (req.office) {
-      splitList(req.office).forEach(function (o) {
-        var span = document.createElement('span');
-        span.className = 'req-office';
-        span.textContent = '📍 ' + o;
-        meta.appendChild(span);
-      });
-    } else {
-      var noOffice = document.createElement('span');
-      noOffice.textContent = 'пока нет ни в одном офисе';
-      meta.appendChild(noOffice);
-    }
-    if (req.bgaAvailable) {
-      var bga = document.createElement('span');
-      bga.className = 'req-bga';
-      bga.textContent = '🕹 можно сыграть на BGA';
-      meta.appendChild(bga);
-    }
-    main.appendChild(meta);
-    row.appendChild(main);
+    var officeCell = document.createElement('div');
+    officeCell.className = 'req-cell req-cell-office';
+    officeCell.appendChild(cellLabel('Доступность в офисе'));
+    officeCell.appendChild(renderChipList(splitList(req.office), 'пока нет ни в одном офисе', 'req-office'));
+    row.appendChild(officeCell);
 
+    var hostsCell = document.createElement('div');
+    hostsCell.className = 'req-cell req-cell-hosts';
+    hostsCell.appendChild(cellLabel('Кто может провести'));
+    hostsCell.appendChild(renderChipList(splitList(req.hosts), 'пока не указано', 'req-host'));
+    row.appendChild(hostsCell);
+
+    var bgaCell = document.createElement('div');
+    bgaCell.className = 'req-cell req-cell-bga';
+    bgaCell.appendChild(cellLabel('BGA'));
+    var bgaBadge = document.createElement('span');
+    bgaBadge.className = 'req-bga' + (req.bgaAvailable ? ' is-yes' : ' is-no');
+    bgaBadge.textContent = req.bgaAvailable ? '🕹 да' : '—';
+    bgaCell.appendChild(bgaBadge);
+    row.appendChild(bgaCell);
+
+    var voteCell = document.createElement('div');
+    voteCell.className = 'req-cell req-cell-vote';
     var voteBtn = document.createElement('button');
     voteBtn.type = 'button';
     voteBtn.className = 'vote-btn' + (req.iVoted ? ' active' : '');
     voteBtn.innerHTML = (req.iVoted ? '✓ Поддержано' : '+ Поддержать') +
       ' <span class="vote-count">(' + req.votes + ')</span>';
     voteBtn.addEventListener('click', function () { toggleVote(req); });
-    row.appendChild(voteBtn);
+    voteCell.appendChild(voteBtn);
+    row.appendChild(voteCell);
 
     return row;
   }
@@ -227,6 +294,9 @@
         errEl.hidden = false;
       });
   });
+
+  document.getElementById('cityFilter').addEventListener('change', renderList);
+  document.getElementById('sortSelect').addEventListener('change', renderList);
 
   // ---------- init ----------
   renderWhoAmI();
