@@ -19,6 +19,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 
+/* Без этого правила элементы с одновременно class="field"/"card" (display: flex) и
+   атрибутом hidden остаются видимыми -- у автора-стиля display:flex тот же приоритет,
+   что и у встроенного правила [hidden]{display:none}, и он побеждает как более поздний.
+   Это ломало, например, поле «Свой город»: оно показывалось всегда, а не только при
+   выборе «Другой». !important гарантирует, что hidden всегда побеждает. */
+[hidden] { display: none !important; }
+
 body {
   font-family: "Beeline Sans", "BeelineSans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   font-weight: 400;
