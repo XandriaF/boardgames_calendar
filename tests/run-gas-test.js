@@ -515,7 +515,16 @@ const id4 = callDoPost({ action: 'identify', name: 'Игрок Один', email:
 check('identify: PIN must be exactly 4 digits', id4.ok === false && id4.error === 'invalid_pin');
 
 const id5 = callDoPost({ action: 'identify', name: '', email: 'noname@beeline.ru', pin: '1234' });
-check('identify: missing name rejected', id5.ok === false && id5.error === 'missing_fields');
+check('identify: brand-new email with blank name is rejected', id5.ok === false && id5.error === 'name_required');
+
+const id6 = callDoPost({ action: 'identify', name: '', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify: returning email + correct PIN succeeds with blank name', id6.ok === true && id6.isNew === false && id6.name === 'Игрок Один');
+
+const id7 = callDoPost({ action: 'identify', name: 'Игрок Переименованный', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify: returning email can update the stored name', id7.ok === true && id7.name === 'Игрок Переименованный');
+
+const id8 = callDoPost({ action: 'identify', name: '', email: 'newacc@beeline.ru', pin: '1234' });
+check('identify: blank name after rename keeps the updated name', id8.ok === true && id8.name === 'Игрок Переименованный');
 
 const idRename = callDoPost({ action: 'identify', name: 'Новое Имя', email: 'newacc@beeline.ru', pin: '1234' });
 check('identify with the correct PIN updates the stored display name', idRename.ok === true);

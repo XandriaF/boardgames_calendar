@@ -251,8 +251,8 @@
     var errEl = document.getElementById('whoAmIError');
     errEl.hidden = true;
 
-    if (!name || !email.includes('@')) {
-      errEl.textContent = 'Укажите имя и корпоративную почту';
+    if (!email.includes('@')) {
+      errEl.textContent = 'Укажите корпоративную почту';
       errEl.hidden = false;
       return;
     }
@@ -277,13 +277,15 @@
             errEl.textContent = 'Код должен состоять из 4 цифр';
           } else if (res.error === 'accounts_sheet_missing') {
             errEl.textContent = 'В таблице не найден лист «Аккаунты» — напишите Дарье: ddkolesnik@beeline.ru';
+          } else if (res.error === 'name_required') {
+            errEl.textContent = 'Это ваш первый вход с этой почты — укажите, пожалуйста, и имя';
           } else {
             errEl.textContent = 'Не получилось сохранить, попробуйте ещё раз';
           }
           errEl.hidden = false;
           return;
         }
-        setMe({ name: name, email: email });
+        setMe({ name: res.name || name, email: email });
         hideOverlay('whoAmIOverlay');
         refresh();
       })

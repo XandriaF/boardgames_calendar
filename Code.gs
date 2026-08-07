@@ -796,14 +796,16 @@ function isAmbassadorEmail(email) {
 }
 
 // первый вход с почты -- человек сам придумывает 4-значный код, он закрепляется за
-// почтой. Повторный вход с той же почты (даже под другим именем) требует этот же код;
-// если код не совпал, отправляем к амбассадору Дарье, чтобы сбросила вручную в таблице.
+// почтой, и имя обязательно (иначе нечего показывать другим). Повторный вход с той же
+// почты требует тот же код, а имя уже необязательно -- если не ввели заново, используем
+// то, что сохранено; если ввели другое, обновляем отображаемое имя. Если код не совпал,
+// отправляем к амбассадору Дарье, чтобы сбросила вручную в таблице.
 function handleIdentify(body) {
   var name = capitalizeFirst(String(body.name || '').trim());
   var email = normalizeEmail(body.email || '');
   var pin = String(body.pin || '').trim();
 
-  if (!name || !email) return { ok: false, error: 'missing_fields' };
+  if (!email) return { ok: false, error: 'missing_fields' };
   if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'invalid_pin' };
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ACCOUNTS);
@@ -811,20 +813,23 @@ function handleIdentify(body) {
   var rowIndex = findAccountRow(sheet, email);
 
   if (rowIndex === -1) {
+    if (!name) return { ok: false, error: 'name_required' };
     sheet.appendRow([email, name, pin, 'Участник', new Date()]);
     // PIN должен остаться текстом -- иначе код вида "0512" потеряет ведущий ноль
     sheet.getRange(sheet.getLastRow(), 3).setNumberFormat('@');
-    return { ok: true, isNew: true };
+    return { ok: true, isNew: true, name: name };
   }
 
   var storedPin = String(sheet.getRange(rowIndex, 3).getValue() || '').trim();
   if (storedPin !== pin) return { ok: false, error: 'wrong_pin' };
 
-  // код верный -- заодно обновим отображаемое имя, если оно поменялось
-  var storedName = sheet.getRange(rowIndex, 2).getValue();
-  if (storedName !== name) sheet.getRange(rowIndex, 2).setValue(name);
+  // код верный -- имя необязательно; если ввели новое, обновим отображаемое имя, если
+  // оставили пустым, используем то, что уже сохранено
+  var storedName = String(sheet.getRange(rowIndex, 2).getValue() || '').trim();
+  var finalName = name || storedName;
+  if (name && storedName !== name) sheet.getRange(rowIndex, 2).setValue(name);
 
-  return { ok: true, isNew: false };
+  return { ok: true, isNew: false, name: finalName };
 }
 
 function jsonOutput(obj) {

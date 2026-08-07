@@ -299,17 +299,20 @@ const server = http.createServer((req, res) => {
         const name = capitalizeFirst((payload.name || '').trim());
         const idEmail = (payload.email || '').toLowerCase().trim();
         const pin = String(payload.pin || '').trim();
-        if (!name || !idEmail) { res.end(JSON.stringify({ ok: false, error: 'missing_fields' })); return; }
+        if (!idEmail) { res.end(JSON.stringify({ ok: false, error: 'missing_fields' })); return; }
         if (!/^\d{4}$/.test(pin)) { res.end(JSON.stringify({ ok: false, error: 'invalid_pin' })); return; }
         const existing = accounts[idEmail];
         if (!existing) {
+          // первый вход с этой почты -- имя обязательно
+          if (!name) { res.end(JSON.stringify({ ok: false, error: 'name_required' })); return; }
           accounts[idEmail] = { name, pin, role: 'Участник' };
-          res.end(JSON.stringify({ ok: true, isNew: true }));
+          res.end(JSON.stringify({ ok: true, isNew: true, name }));
           return;
         }
         if (existing.pin !== pin) { res.end(JSON.stringify({ ok: false, error: 'wrong_pin' })); return; }
-        existing.name = name;
-        res.end(JSON.stringify({ ok: true, isNew: false }));
+        // повторный вход -- имя необязательно, обновляем только если реально ввели новое
+        if (name) existing.name = name;
+        res.end(JSON.stringify({ ok: true, isNew: false, name: existing.name }));
         return;
       }
       if (payload.action === 'vote' || payload.action === 'unvote') {
