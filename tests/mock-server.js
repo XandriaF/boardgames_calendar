@@ -35,7 +35,7 @@ let accounts = {};
 // «Приём заявок» -- каталог игр (лист «Заявки», пополняется только вручную) + событийный
 // лог голосов (лист «Заявки_голоса»), один плюсик на игру на человека, игр -- сколько угодно
 const requests = [
-  { game: 'Каркассон', office: 'Москва, Санкт-Петербург', bggUrl: 'https://boardgamegeek.com/boardgame/822/carcassonne' },
+  { game: 'Каркассон', office: 'Москва (локер 5, 2 этаж); Санкт-Петербург', bggUrl: 'https://boardgamegeek.com/boardgame/822/carcassonne' },
   { game: 'Манчкин', office: '', bggUrl: '' },
 ];
 let votes = [];

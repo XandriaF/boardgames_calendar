@@ -50,7 +50,7 @@ let accountRows = [
 // Заявки: Игра, Офис, Ссылка на BGG -- пополняется ТОЛЬКО вручную, сайт только читает
 let requestRows = [
   ['Игра', 'Офис', 'Ссылка на BGG'],
-  ['Каркассон', 'Москва, Санкт-Петербург', 'https://boardgamegeek.com/boardgame/822/carcassonne'],
+  ['Каркассон', 'Москва (локер 5, 2 этаж); Санкт-Петербург', 'https://boardgamegeek.com/boardgame/822/carcassonne'],
   ['Манчкин', '', ''],
 ];
 
@@ -679,7 +679,7 @@ check('2 catalog games returned', rq1.requests.length === 2);
 check('anonymous viewer has iVoted=false everywhere, votes start at 0',
   rq1.requests.every(r => r.iVoted === false && r.votes === 0));
 check('catalog carries office/bggUrl straight from the sheet',
-  rq1.requests.find(r => r.game === 'Каркассон').office === 'Москва, Санкт-Петербург' &&
+  rq1.requests.find(r => r.game === 'Каркассон').office === 'Москва (локер 5, 2 этаж); Санкт-Петербург' &&
   rq1.requests.find(r => r.game === 'Каркассон').bggUrl === 'https://boardgamegeek.com/boardgame/822/carcassonne');
 
 const v1 = callDoPost({ action: 'vote', game: 'Каркассон', email: 'voter1@beeline.ru', name: 'Голосующий Один' });

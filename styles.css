@@ -101,6 +101,27 @@ input { text-transform: none; }
 .info-link .cap { margin-top: 3px; }
 .info-link .arrow { color: var(--t3); font-size: 20px; }
 
+/* ---------- info page: communities by city ---------- */
+.section-title { font-size: 20px; font-weight: 700; margin-top: 32px; }
+.section-lead { margin-top: 4px; }
+.city-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.city-card {
+  background: var(--card);
+  border-radius: var(--r-xl);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.city-card .n { font-size: 17px; font-weight: 600; }
+.city-contact, .city-ambassadors a { color: var(--t1); text-decoration: none; }
+.city-contact:hover, .city-ambassadors a:hover { text-decoration: underline; }
+.city-ambassadors { line-height: 1.6; }
+.city-meta { font-size: 13px; color: var(--t2); }
+.city-card-link { font-size: 13px; font-weight: 600; color: var(--t2); text-decoration: none; margin-top: 4px; }
+.city-card-link:hover { color: var(--t1); text-decoration: underline; }
+.mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+
 /* ---------- requests page (game wishlist / voting) ---------- */
 .requests-table { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
 .requests-row {

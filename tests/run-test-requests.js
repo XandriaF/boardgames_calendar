@@ -60,6 +60,12 @@ async function identifyVia(doc, name, email, pin) {
 
   const carcRow = Array.from(doc.querySelectorAll('.requests-row')).find(r => r.querySelector('.req-game').textContent === 'Каркассон');
   if (!carcRow.querySelector('.req-meta').textContent.includes('Москва')) throw new Error('office not rendered for Каркассон');
+  // офисы разделены ";", а не ",", именно чтобы запятая внутри адреса одного офиса
+  // ("Москва (локер 5, 2 этаж)") не резала его на лишние куски -- проверяем, что
+  // получилось ровно 2 офиса, а не 3
+  const officeSpans = carcRow.querySelectorAll('.req-meta span');
+  if (officeSpans.length !== 2) throw new Error('expected exactly 2 offices (comma inside one office must not split it), got: ' + officeSpans.length);
+  if (!officeSpans[0].textContent.includes('локер 5, 2 этаж')) throw new Error('comma inside a single office address should survive intact, got: ' + officeSpans[0].textContent);
   if (!carcRow.querySelector('.card-link')) throw new Error('BGG link should render for a game that has one');
   const carcVoteBtn = carcRow.querySelector('.vote-btn');
   if (carcVoteBtn.classList.contains('active')) throw new Error('vote button should not start active');

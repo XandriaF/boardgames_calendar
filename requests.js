@@ -12,8 +12,11 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
+  // офисы разделяются точкой с запятой (а не запятой), потому что сам адрес внутри одного
+  // офиса обычно и так содержит запятые ("Москва (локер 5, 2 этаж)") -- запятая как
+  // разделитель между офисами сломала бы такие адреса на лишние куски
   function splitList(s) {
-    return String(s || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    return String(s || '').split(';').map(function (x) { return x.trim(); }).filter(Boolean);
   }
 
   // ---------- persistence of "who am I" -- same localStorage key as index.html/organizer.html,
