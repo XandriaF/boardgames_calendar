@@ -157,7 +157,7 @@ input { text-transform: none; }
   grid-template-columns: minmax(140px, 1.1fr) minmax(200px, 1.8fr) minmax(180px, 1.6fr) 84px auto;
   column-gap: 18px;
   margin-top: 20px;
-  align-items: start;
+  align-items: stretch;
   background: var(--card);
   border-radius: var(--r-xl);
   padding: 6px 24px;
@@ -172,7 +172,6 @@ input { text-transform: none; }
   padding-top: 18px;
   padding-bottom: 12px;
   border-bottom: 2px solid var(--border);
-  align-self: end;
 }
 .requests-row { display: contents; }
 .req-cell { padding: 18px 0; border-bottom: 1px solid var(--border); }
