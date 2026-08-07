@@ -157,7 +157,10 @@ input { text-transform: none; }
   grid-template-columns: minmax(140px, 1.1fr) minmax(200px, 1.8fr) minmax(180px, 1.6fr) 84px auto;
   column-gap: 18px;
   margin-top: 20px;
-  align-items: center;
+  align-items: start;
+  background: var(--card);
+  border-radius: var(--r-xl);
+  padding: 6px 24px;
 }
 .requests-head { display: contents; }
 .requests-head > div {
@@ -166,11 +169,13 @@ input { text-transform: none; }
   letter-spacing: 0.06em;
   color: var(--t2);
   font-weight: 600;
-  padding-bottom: 10px;
+  padding-top: 18px;
+  padding-bottom: 12px;
   border-bottom: 2px solid var(--border);
+  align-self: end;
 }
 .requests-row { display: contents; }
-.req-cell { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.req-cell { padding: 18px 0; border-bottom: 1px solid var(--border); }
 .requests-row:last-child .req-cell { border-bottom: none; }
 .req-cell-label { display: none; }
 .req-game { font-size: 15px; font-weight: 600; }
@@ -197,7 +202,7 @@ input { text-transform: none; }
 
 @media (max-width: 760px) {
   .requests-head { display: none; }
-  .requests-table { display: flex; flex-direction: column; gap: 12px; }
+  .requests-table { display: flex; flex-direction: column; gap: 12px; background: transparent; padding: 0; margin-top: 20px; }
   .requests-row {
     display: flex;
     flex-direction: column;
