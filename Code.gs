@@ -663,13 +663,14 @@ function getRequestsList(viewerEmail) {
     var game = String(row[0] || '').trim();
     if (!game) continue;
     var office = String(row[1] || '').trim();
-    var bggUrl = String(row[2] || '').trim();
+    // колонка «Возможность сыграть на BGA» -- чекбокс, ставится только вручную в таблице
+    var bgaAvailable = row[2] === true;
     var active = (votes[requestKey(game)] || []).filter(function (v) { return v.status === 'Голос'; });
     var iVoted = !!viewerEmail && active.some(function (v) { return v.email === viewerEmail; });
     list.push({
       game: capitalizeFirst(game),
       office: office,
-      bggUrl: bggUrl,
+      bgaAvailable: bgaAvailable,
       votes: active.length,
       iVoted: iVoted
     });

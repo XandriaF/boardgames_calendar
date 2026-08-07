@@ -127,6 +127,13 @@
         genreGroup.appendChild(chip);
       });
       genreWrap.appendChild(genreGroup);
+      var genreCustomInput = document.createElement('input');
+      genreCustomInput.type = 'text';
+      genreCustomInput.placeholder = '+ свой жанр, если не нашли в списке';
+      genreCustomInput.style.marginTop = '10px';
+      genreCustomInput.value = g.customGenre || '';
+      genreCustomInput.addEventListener('input', function () { g.customGenre = genreCustomInput.value; });
+      genreWrap.appendChild(genreCustomInput);
       grid.appendChild(genreWrap);
 
       var diffSelect = document.createElement('select');
@@ -182,7 +189,7 @@
   }
 
   document.getElementById('addEventGameBtn').addEventListener('click', function () {
-    eventGamesState.push({ name: '', genres: [], difficulty: '', maxDuration: '', setting: '', teseraUrl: '', bggUrl: '', imageUrl: '' });
+    eventGamesState.push({ name: '', genres: [], customGenre: '', difficulty: '', maxDuration: '', setting: '', teseraUrl: '', bggUrl: '', imageUrl: '' });
     renderEventGames();
   });
 
@@ -362,9 +369,10 @@
     return eventGamesState
       .filter(function (g) { return g.name && g.name.trim(); })
       .map(function (g) {
+        var customGenres = (g.customGenre || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
         return {
           game: g.name.trim(),
-          format: g.genres.join(', '),
+          format: g.genres.concat(customGenres).join(', '),
           difficulty: g.difficulty,
           maxDuration: g.maxDuration ? Number(g.maxDuration) : null,
           setting: g.setting.trim(),
@@ -375,6 +383,14 @@
       });
   }
 
+  // объединяет выбранные чипы жанров со свободным текстом из "+ свой жанр" -- через запятую
+  // можно вписать и несколько своих сразу, как в поле «Сеттинг»
+  function collectGenres() {
+    var custom = document.getElementById('fGenreCustom').value
+      .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    return selectedGenres.concat(custom).join(', ');
+  }
+
   function collectFormValues() {
     var cityRaw = document.getElementById('fCity').value;
     var city = cityRaw === 'Другой' ? document.getElementById('fCityOther').value.trim() : cityRaw;
@@ -383,7 +399,7 @@
       date: document.getElementById('fDate').value,
       time: document.getElementById('fTime').value,
       city: city,
-      format: selectedGenres.join(', '),
+      format: collectGenres(),
       game: document.getElementById('fGame').value.trim(),
       place: document.getElementById('fPlace').value.trim(),
       organizer: (me && me.name) || '',

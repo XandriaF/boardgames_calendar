@@ -94,6 +94,7 @@ function fireEvent(win, el, type) {
   pickCity('Другой', 'Казань');
   if (doc.getElementById('fCityOtherWrap').hidden) throw new Error('"Другой" should reveal the free-text city field');
   selectGenres('НРИ', 'Приключение');
+  doc.getElementById('fGenreCustom').value = 'Лавкрафтиана';
   doc.getElementById('fGame').value = 'Зов Ктулху';
   doc.getElementById('fPlace').value = 'Клуб настолок';
   doc.getElementById('fMax').value = '6';
@@ -166,6 +167,9 @@ function fireEvent(win, el, type) {
   if (!createdTags.includes('НРИ') || !createdTags.includes('Приключение')) {
     throw new Error('created event missing its multi-select genre tags on index.html, got: ' + createdTags);
   }
+  if (!createdTags.includes('Лавкрафтиана')) {
+    throw new Error('created event missing its custom (free-text) genre tag on index.html, got: ' + createdTags);
+  }
   if (!createdCard.querySelector('.card-meta').textContent.includes('180 мин')) throw new Error('created event missing max duration line on index.html');
   if (!createdTags.includes('ужасы') || !createdTags.includes('детектив')) {
     throw new Error('created event missing setting keyword tags on index.html, got: ' + createdTags);
@@ -196,6 +200,7 @@ function fireEvent(win, el, type) {
   await waitFor(() => doc.getElementById('eventForm').hidden === false);
   if (!doc.getElementById('fCityOtherWrap').hidden) throw new Error('reset should hide the "Другой" city field again');
   if (doc.getElementById('fFormatGroup').querySelectorAll('.chip.active').length !== 0) throw new Error('reset should clear selected genre chips');
+  if (doc.getElementById('fGenreCustom').value !== '') throw new Error('reset should clear the custom genre free-text field too, got: ' + doc.getElementById('fGenreCustom').value);
   if (!doc.getElementById('organizerIdText').textContent.includes('igor@beeline.ru')) {
     throw new Error('organizer identity should survive a form reset');
   }
@@ -342,6 +347,18 @@ function fireEvent(win, el, type) {
   doc.getElementById('fPlace').value = 'Клубик';
   doc.getElementById('fGame').value = 'Субботник в офисе';
 
+  // attach one board game to the «событие», including its own custom (free-text) genre --
+  // the per-game genre chips reuse the exact same "+ свой жанр" pattern as the main form
+  doc.getElementById('addEventGameBtn').click();
+  doc.querySelector('.event-game-block input[type="text"]').value = 'Кодовые имена';
+  doc.querySelector('.event-game-block input[type="text"]').dispatchEvent(new dom.window.Event('input'));
+  // clicking a genre chip re-renders the whole block (fresh DOM nodes), so re-query
+  // afterwards instead of holding on to a reference that's about to go stale
+  Array.from(doc.querySelectorAll('.event-game-block .chip')).find(c => c.textContent === 'Пати').click();
+  const eventGameCustomGenre = doc.querySelector('.event-game-block input[placeholder*="свой жанр"]');
+  eventGameCustomGenre.value = 'Ассоциации';
+  eventGameCustomGenre.dispatchEvent(new dom.window.Event('input'));
+
   submitEvent();
   await waitFor(() => doc.getElementById('resultCard').hidden === false);
   console.log('PASS: «событие» submitted successfully with just описание/город/где/когда');
@@ -360,6 +377,15 @@ function fireEvent(win, el, type) {
     throw new Error('created «событие» should be stored with type="event", got: ' + JSON.stringify(createdEventEntry));
   }
   console.log('PASS: «событие» stored server-side with type="event"');
+
+  const attachedGame = createdEventEntry.games && createdEventEntry.games[0];
+  if (!attachedGame || attachedGame.game !== 'Кодовые имена') {
+    throw new Error('«событие» should carry its one attached game, got: ' + JSON.stringify(createdEventEntry.games));
+  }
+  if (!attachedGame.format.includes('Пати') || !attachedGame.format.includes('Ассоциации')) {
+    throw new Error('attached game\'s genre should combine the picked chip AND the free-text "+ свой жанр" value, got: ' + attachedGame.format);
+  }
+  console.log('PASS: attached game to «событие» combines chip genre + custom free-text genre ->', attachedGame.format);
 
   // switching back to "Анонсировать игру" (e.g. after a reset) restores the full form
   doc.getElementById('resetBtn').click();

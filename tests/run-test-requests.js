@@ -63,22 +63,24 @@ async function identifyVia(doc, name, email, pin) {
   // офисы разделены ";", а не ",", именно чтобы запятая внутри адреса одного офиса
   // ("Москва (локер 5, 2 этаж)") не резала его на лишние куски -- проверяем, что
   // получилось ровно 2 офиса, а не 3
-  const officeSpans = carcRow.querySelectorAll('.req-meta span');
+  const officeSpans = carcRow.querySelectorAll('.req-office');
   if (officeSpans.length !== 2) throw new Error('expected exactly 2 offices (comma inside one office must not split it), got: ' + officeSpans.length);
   if (!officeSpans[0].textContent.includes('локер 5, 2 этаж')) throw new Error('comma inside a single office address should survive intact, got: ' + officeSpans[0].textContent);
-  if (!carcRow.querySelector('.card-link')) throw new Error('BGG link should render for a game that has one');
+  if (!carcRow.querySelector('.req-bga')) throw new Error('"can play on BGA" badge should render when bgaAvailable is true');
+  if (!carcRow.querySelector('.req-bga').textContent.includes('BGA')) throw new Error('BGA badge text looks wrong: ' + carcRow.querySelector('.req-bga').textContent);
   const carcVoteBtn = carcRow.querySelector('.vote-btn');
   if (carcVoteBtn.classList.contains('active')) throw new Error('vote button should not start active');
   if (!carcVoteBtn.textContent.includes('+ Поддержать') || !carcVoteBtn.textContent.includes('(0)')) {
     throw new Error('vote button should start as "+ Поддержать (0)", got: ' + carcVoteBtn.textContent);
   }
-  console.log('PASS: Каркассон row shows office, BGG link, and an inactive "+ Поддержать (0)" button');
+  console.log('PASS: Каркассон row shows office, "can play on BGA" badge, and an inactive "+ Поддержать (0)" button');
 
   const munchkinRow = Array.from(doc.querySelectorAll('.requests-row')).find(r => r.querySelector('.req-game').textContent === 'Манчкин');
   if (!munchkinRow.querySelector('.req-meta').textContent.includes('пока нет ни в одном офисе')) {
     throw new Error('a game with no office should say so explicitly');
   }
-  console.log('PASS: a game with an empty "Офис" column shows the "нет ни в одном офисе" fallback');
+  if (munchkinRow.querySelector('.req-bga')) throw new Error('BGA badge should not render when bgaAvailable is false');
+  console.log('PASS: a game with an empty "Офис" column shows the fallback, and no BGA badge when bgaAvailable is false');
 
   // 2. clicking vote with no identity set opens the "это вы" modal instead of voting
   carcVoteBtn.click();

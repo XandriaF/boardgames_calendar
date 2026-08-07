@@ -92,6 +92,7 @@
     if (req.office) {
       splitList(req.office).forEach(function (o) {
         var span = document.createElement('span');
+        span.className = 'req-office';
         span.textContent = '📍 ' + o;
         meta.appendChild(span);
       });
@@ -100,14 +101,11 @@
       noOffice.textContent = 'пока нет ни в одном офисе';
       meta.appendChild(noOffice);
     }
-    if (req.bggUrl) {
-      var bgg = document.createElement('a');
-      bgg.href = req.bggUrl;
-      bgg.target = '_blank';
-      bgg.rel = 'noopener noreferrer';
-      bgg.className = 'card-link';
-      bgg.textContent = 'Об игре на BGG ↗';
-      meta.appendChild(bgg);
+    if (req.bgaAvailable) {
+      var bga = document.createElement('span');
+      bga.className = 'req-bga';
+      bga.textContent = '🕹 можно сыграть на BGA';
+      meta.appendChild(bga);
     }
     main.appendChild(meta);
     row.appendChild(main);
