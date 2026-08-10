@@ -20,10 +20,16 @@
     <p class="lead md">анонсы игротек и ролевых вечеров по городам компании. фильтруйте по городу и формату, записывайтесь в одно касание — отменить можно в любой момент.</p>
   </div>
 
+  <div class="whoami-banner">
+    <span class="filter-label">Это вы</span>
+    <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+  </div>
+
   <nav class="top-nav pillrow" aria-label="Разделы">
     <a class="chip active" href="index.html">Календарь</a>
     <a class="chip" href="requests.html">Приём заявок</a>
     <a class="chip" href="info.html">Важная информация</a>
+    <a class="chip" href="my.html" id="navMyGames" hidden>Мои игры</a>
   </nav>
 
   <section class="grid stats-grid" id="statsRow" aria-hidden="true"></section>
@@ -36,12 +42,6 @@
     <div class="filter-block">
       <span class="filter-label">Жанр</span>
       <div class="pillrow" id="formatChips"></div>
-    </div>
-    <div class="filter-block id-group">
-      <span class="filter-label">Это вы</span>
-      <div class="pillrow">
-        <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
-      </div>
     </div>
   </div>
 

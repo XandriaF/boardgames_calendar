@@ -333,7 +333,6 @@ input { text-transform: none; }
   border-bottom: 1px solid var(--border);
 }
 .filter-block { display: flex; flex-direction: column; gap: 8px; }
-.id-group { margin-left: auto; }
 .filter-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -605,16 +604,7 @@ input { text-transform: none; }
   line-height: 1.4;
   margin: -6px 0 14px;
 }
-.organizer-id-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 640px) {
-  .id-group { margin-left: 0; }
   .hero { font-size: 32px; line-height: 38px; }
   .head { padding: 28px 22px; }
   .stats-grid { grid-template-columns: 1fr; }

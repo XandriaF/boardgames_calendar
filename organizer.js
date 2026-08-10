@@ -280,18 +280,13 @@
   function hideOverlay(id) { document.getElementById(id).hidden = true; }
 
   // организатор/email больше не свободные поля формы -- это уже подтверждённая (PIN'ом)
-  // личность из "это вы"; показываем её здесь же, чтобы её было видно и можно было сменить
+  // личность из "это вы" (баннер над навигацией, общий со всеми страницами сайта)
   function renderWhoAmI() {
     var me = getMe();
-    var textEl = document.getElementById('organizerIdText');
-    var btn = document.getElementById('whoAmIBtn');
-    if (me && me.name && me.email) {
-      textEl.textContent = me.name + ' · ' + me.email;
-      btn.textContent = 'изменить';
-    } else {
-      textEl.textContent = 'Ещё не указано — нажмите «это вы», чтобы участники видели, как с вами связаться';
-      btn.textContent = 'это вы';
-    }
+    var label = (me && me.name) ? me.name + (me.email ? ' · ' + me.email : '') : 'указать имя и почту';
+    document.getElementById('whoAmIBtn').textContent = label;
+    var navMy = document.getElementById('navMyGames');
+    if (navMy) navMy.hidden = !(me && me.email);
   }
 
   function buildPostText(ev, link) {
@@ -424,7 +419,7 @@
     var ev = collectFormValues();
 
     if (!ev.organizer || !ev.organizerEmail) {
-      showFormError('Сначала укажите, кто вы — кнопка «это вы» рядом с полем «Организатор»');
+      showFormError('Сначала укажите, кто вы — кнопка «это вы» вверху страницы');
       return;
     }
     if (!ev.date || !ev.city || !ev.game) {

@@ -71,11 +71,14 @@ function fireEvent(win, el, type) {
     if (value === 'Другой') doc.getElementById('fCityOther').value = otherText;
   }
 
-  // there are no more free-text "Организатор"/"Email организатора" fields -- identify via
-  // "это вы" (name + email + 4-digit PIN) before submitting anything
-  if (doc.getElementById('organizerIdText').textContent.includes('@')) {
+  // there are no more free-text "Организатор"/"Email организатора" fields, and no dedicated
+  // in-form identity row either -- "это вы" now lives in one shared banner above the nav
+  // tabs (same markup/position on every page), identify via name + email + 4-digit PIN
+  // before submitting anything
+  if (doc.getElementById('whoAmIBtn').textContent.includes('@')) {
     throw new Error('organizer identity should start unset');
   }
+  if (doc.getElementById('navMyGames').hidden !== true) throw new Error('"Мои игры" nav link should start hidden, before any identity is set');
   doc.getElementById('whoAmIBtn').click();
   await waitFor(() => !doc.getElementById('whoAmIOverlay').hidden);
   doc.getElementById('inputName').value = 'Игорь';
@@ -83,10 +86,11 @@ function fireEvent(win, el, type) {
   doc.getElementById('inputPin').value = '2468';
   doc.getElementById('saveWhoAmI').click();
   await waitFor(() => doc.getElementById('whoAmIOverlay').hidden === true, 5000);
-  if (!doc.getElementById('organizerIdText').textContent.includes('Игорь') || !doc.getElementById('organizerIdText').textContent.includes('igor@beeline.ru')) {
-    throw new Error('organizer identity display should show the saved name+email, got: ' + doc.getElementById('organizerIdText').textContent);
+  if (!doc.getElementById('whoAmIBtn').textContent.includes('Игорь') || !doc.getElementById('whoAmIBtn').textContent.includes('igor@beeline.ru')) {
+    throw new Error('the "это вы" banner should show the saved name+email, got: ' + doc.getElementById('whoAmIBtn').textContent);
   }
-  console.log('PASS: identified as organizer via "это вы" (name + email + PIN)');
+  if (doc.getElementById('navMyGames').hidden !== false) throw new Error('"Мои игры" nav link should appear once identified');
+  console.log('PASS: identified as organizer via "это вы" (name + email + PIN); "Мои игры" nav link appears');
 
   // fill the form -- "Казань" isn't in the fixed list, so exercises the "Другой" free-text path
   doc.getElementById('fDate').value = '2026-09-15';
@@ -201,7 +205,7 @@ function fireEvent(win, el, type) {
   if (!doc.getElementById('fCityOtherWrap').hidden) throw new Error('reset should hide the "Другой" city field again');
   if (doc.getElementById('fFormatGroup').querySelectorAll('.chip.active').length !== 0) throw new Error('reset should clear selected genre chips');
   if (doc.getElementById('fGenreCustom').value !== '') throw new Error('reset should clear the custom genre free-text field too, got: ' + doc.getElementById('fGenreCustom').value);
-  if (!doc.getElementById('organizerIdText').textContent.includes('igor@beeline.ru')) {
+  if (!doc.getElementById('whoAmIBtn').textContent.includes('igor@beeline.ru')) {
     throw new Error('organizer identity should survive a form reset');
   }
   doc.getElementById('fDate').value = '2026-09-15';

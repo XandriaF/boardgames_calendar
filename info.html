@@ -20,10 +20,16 @@
     <p class="lead md">сообщества, чаты и полезные ссылки для тех, кто играет в настолки в билайне.</p>
   </div>
 
+  <div class="whoami-banner">
+    <span class="filter-label">Это вы</span>
+    <button class="btn-ghost" id="whoAmIBtn" type="button">указать имя и почту</button>
+  </div>
+
   <nav class="top-nav pillrow" aria-label="Разделы">
     <a class="chip" href="index.html">Календарь</a>
     <a class="chip" href="requests.html">Приём заявок</a>
     <a class="chip active" href="info.html">Важная информация</a>
+    <a class="chip" href="my.html" id="navMyGames" hidden>Мои игры</a>
   </nav>
 
   <div class="info-list">
@@ -153,5 +159,32 @@
 
 </div>
 
+<!-- Модалка: это вы (имя+почта+код) -- нужна здесь, чтобы почта была узнана сайтом и
+     открылась вкладка «Мои игры» в навигации, как и на остальных страницах -->
+<div class="modal-overlay" id="whoAmIOverlay" hidden>
+  <div class="modal">
+    <button class="modal-close" data-close>×</button>
+    <h3>Это вы?</h3>
+    <p class="modal-hint">Почта и код нужны, чтобы сайт узнавал вас на всех вкладках — например, чтобы показать вкладку «Мои игры».</p>
+    <label class="field">
+      <span>Имя (только при первом входе с этой почты)</span>
+      <input type="text" id="inputName" placeholder="Даша Иванова" autocomplete="name">
+    </label>
+    <label class="field">
+      <span>Корпоративная почта</span>
+      <input type="email" id="inputEmail" placeholder="ivan.ivanov@beeline.ru" autocomplete="email">
+    </label>
+    <label class="field">
+      <span>Код (4 цифры)</span>
+      <input type="text" id="inputPin" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <span class="field-hint">Заходите с этой почтой впервые — просто придумайте код, он закрепится за вами. Почта уже знакома сайту — введите тот же код, что и в прошлый раз.</span>
+    </label>
+    <button class="btn-primary" id="saveWhoAmI" type="button">Сохранить</button>
+    <p class="modal-error" id="whoAmIError" hidden></p>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="info.js"></script>
 </body>
 </html>

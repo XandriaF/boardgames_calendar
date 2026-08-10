@@ -73,6 +73,8 @@
     var me = getMe();
     var label = (me && me.name) ? me.name + (me.email ? ' · ' + me.email : '') : 'указать имя и почту';
     document.getElementById('whoAmIBtn').textContent = label;
+    var navMy = document.getElementById('navMyGames');
+    if (navMy) navMy.hidden = !(me && me.email);
   }
 
   // ---------- API ----------

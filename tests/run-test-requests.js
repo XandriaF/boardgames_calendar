@@ -47,23 +47,27 @@ function visibleGameNames(doc) {
   const organizerHtml = fs.readFileSync(path.join(SITE, 'organizer.html'), 'utf8');
   const infoHtml = fs.readFileSync(path.join(SITE, 'info.html'), 'utf8');
   const requestsHtmlRaw = fs.readFileSync(path.join(SITE, 'requests.html'), 'utf8');
-  [indexHtml, organizerHtml, infoHtml, requestsHtmlRaw].forEach((html, i) => {
-    const label = ['index.html', 'organizer.html', 'info.html', 'requests.html'][i];
-    if (!html.includes('href="index.html"') || !html.includes('href="requests.html"') || !html.includes('href="info.html"')) {
-      throw new Error(label + ' is missing one of the 3 top-nav links');
+  const myHtml = fs.readFileSync(path.join(SITE, 'my.html'), 'utf8');
+  [indexHtml, organizerHtml, infoHtml, requestsHtmlRaw, myHtml].forEach((html, i) => {
+    const label = ['index.html', 'organizer.html', 'info.html', 'requests.html', 'my.html'][i];
+    if (!html.includes('href="index.html"') || !html.includes('href="requests.html"') || !html.includes('href="info.html"') || !html.includes('href="my.html"')) {
+      throw new Error(label + ' is missing one of the 4 top-nav links');
     }
   });
-  console.log('PASS: all 4 pages carry the shared top-nav (Календарь/Приём заявок/Важная информация)');
+  console.log('PASS: all 5 pages carry the shared top-nav (Календарь/Приём заявок/Важная информация/Мои игры)');
 
-  // 0. "это вы" lives in its own prominent banner above the filter toolbar, not buried
-  // inside the filters row itself
+  // 0. "это вы" lives in its own prominent banner right under the header, above BOTH the nav
+  // tabs and the page's own filter toolbar -- same layout on every page. The "Мои игры" nav
+  // link only appears once identified (it's not even present, unhidden, on requests.html).
   if (!requestsHtmlRaw.includes('whoami-banner')) throw new Error('"это вы" should be its own .whoami-banner block');
   const whoamiIdx = requestsHtmlRaw.indexOf('whoami-banner');
+  const navIdx = requestsHtmlRaw.indexOf('class="top-nav');
   const filtersIdx = requestsHtmlRaw.indexOf('id="filters"');
-  if (whoamiIdx === -1 || filtersIdx === -1 || whoamiIdx > filtersIdx) {
-    throw new Error('.whoami-banner should come BEFORE the #filters toolbar in the markup');
+  if (whoamiIdx === -1 || navIdx === -1 || filtersIdx === -1 || whoamiIdx > navIdx || navIdx > filtersIdx) {
+    throw new Error('expected order in the markup: .whoami-banner, then .top-nav, then #filters');
   }
-  console.log('PASS: "это вы" banner is positioned above the filter/sort toolbar');
+  if (!requestsHtmlRaw.includes('id="navMyGames" hidden')) throw new Error('"Мои игры" nav link should start hidden on requests.html');
+  console.log('PASS: "это вы" banner sits above the nav tabs, which sit above the filter/sort toolbar');
 
   // 1. initial render: 3 catalog games (server-sorted by votes desc, then alphabetically)
   const dom = freshDom();
@@ -160,6 +164,9 @@ function visibleGameNames(doc) {
 
   await identifyVia(doc, 'Тестовый Голосующий', 'req.voter1@beeline.ru', '1111');
   console.log('PASS: identified via "это вы" (name + email + PIN), same flow as the calendar page');
+
+  if (doc.getElementById('navMyGames').hidden !== false) throw new Error('"Мои игры" nav link should appear once identified');
+  console.log('PASS: "Мои игры" nav link appears once identified');
 
   // 5. now vote for real -- button becomes active, count increments from the 2 seeded votes
   rowByGame(doc, 'Каркассон').querySelector('.vote-btn').click();

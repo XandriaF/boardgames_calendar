@@ -43,6 +43,18 @@ async function identifyVia(doc, name, email, pin) {
 
   const doc = window.document;
 
+  // 0. "это вы" lives in its own prominent banner right under the header, above the nav
+  // tabs (which are themselves above the page-specific filters) -- same layout on every page.
+  // The "Мои игры" nav link only appears once identified.
+  const whoamiEl = doc.querySelector('.whoami-banner');
+  const navEl = doc.querySelector('.top-nav');
+  if (!whoamiEl) throw new Error('"это вы" should be its own .whoami-banner block');
+  var pos = whoamiEl.compareDocumentPosition(navEl);
+  if (!(pos & window.Node.DOCUMENT_POSITION_FOLLOWING)) throw new Error('.whoami-banner should come before .top-nav in the markup');
+  const navMyGames = doc.getElementById('navMyGames');
+  if (!navMyGames || navMyGames.hidden !== true) throw new Error('"Мои игры" nav link should start hidden, before any identity is set');
+  console.log('PASS: "это вы" banner sits above the nav tabs; "Мои игры" link starts hidden');
+
   // 1. wait for events to render -- 3 cards expected: the past-dated 4th event
   // (Корона из пепла) is hidden by default now, until "показать прошедшие" is clicked.
   // The scheduled ("Тайный проект") and closed ("Секретный клуб") events stay hidden from
@@ -144,6 +156,9 @@ async function identifyVia(doc, name, email, pin) {
     throw new Error('whoAmIBtn should show the saved name+email after identify, got: ' + doc.getElementById('whoAmIBtn').textContent);
   }
   console.log('PASS: first-time identify with a fresh PIN creates the account and sets identity');
+
+  if (doc.getElementById('navMyGames').hidden !== false) throw new Error('"Мои игры" nav link should appear once identified');
+  console.log('PASS: "Мои игры" nav link appears once identified');
 
   // now that identity is set, "Записаться" opens the real signup modal, showing who we are
   signBtn.click();
